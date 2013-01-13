@@ -1,0 +1,24 @@
+*0
+%2A successful victory for America.
+#4
+%2Thanks to the Allied campaign, Germany
+%2  has no choice but to surrender.
+#6
+%2The largest conflict in history is ended.
+#4
+*1
+%2After the fall of Germany, the Allies can
+%2  turn their attention to defeating Japan.
+#6
+%2And after all the destruction is ended, there
+%2  can finally be a period of rebuilding.
+#6
+*2
+%1...But was it right?
+#4
+%1What does this flag stand for, anyway?
+#6
+%
+%
+#6
+!

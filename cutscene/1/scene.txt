@@ -1,0 +1,26 @@
+*0
+%0Okay men, listen up.
+#2
+%0Today, our allies made a successful invasion
+%0  on the European front.
+#4
+%0We'll be working on some unique missions.
+%0  But it will also be very dangerous.
+#3
+*1
+%0Now, I know you all have different reasons
+%0  for signing up for duty.
+#4
+%0But you are all united in your call to serve
+%0  your country.  And you do it well.
+#4
+*2
+%0Feel some *pride* when you see that flag!
+#6
+%1The coming battles will be hard....
+#4
+%1But this symbol of justice will prevail!
+#6
+%
+%
+!

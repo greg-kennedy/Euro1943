@@ -1,0 +1,17 @@
+1   0 Welcome to the front lines kid.
+20  0 Our objective today is to hold this bridge.
+40  0 It is vital for the allied advancement.
+60  0 I am your commander, and I will keep you
+61  0   equipped and healthy...
+80  0 if you take some basic precautions of course.
+120 0 Today we are going to learn about basic combat.
+140 0 Use those arrow keys to move yourself around.
+160 0 Left and right will cause you to rotate.
+180 0 Up and down will make you move ahead or back.
+200 0 Use the mouse to aim.  The left mouse button
+220 0 is fire.  Depending on your weapon, right mouse
+240 0 button may have some other effects.
+260 0 Think you got all that?
+280 1 Yes sir!
+300 0 Good man.  Now get to the fight!
+330 1 ...He seems like a good officer *...

@@ -1,0 +1,15 @@
+1   0 Today we're attacking the enemy by land.
+20  0 Since we have a wide area to cover,
+40  0 I will provide you with vehicles for support.
+60  0 Enter a vehicle with the ENTER key
+61  0   or the middle mouse button.
+80  0 Use the mouse and keys to control or fire.
+100 0 Do be careful not to drive them into a lake.
+140 0 The enemy is holding prisoners captive in a
+141 0   camp beyond their HQ.
+160 0 If we hold this area, we can liberate the
+161 0   hapless prisoners with ease.
+180 1 Well, that's certainly a noble goal...
+200 0 You're damn right son.  Uncle Sam cares about
+201 0   the REAL victims of this war.
+220 1 ...I feel *proud* to serve my country!

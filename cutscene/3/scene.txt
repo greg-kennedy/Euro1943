@@ -1,0 +1,29 @@
+*0
+%2Another victory for this emblem of justice.
+#4
+%2Today our success has paved the way for the
+%2  liberation of this secret laboratory.
+#4
+*1
+%2All kinds of +horrific+ experiments are now
+%2  ended, thanks to you.
+#6
+%2Of course, the prisoners here are *thankful*
+%2  at their release.
+#6
+%2Without our help, they would surely be in for
+%2  a terrible fate.
+#6
+*2
+%2The Allies are bringing the European front
+%2  to a close.
+#6
+%2We have only one more mission before the German
+%2  surrender is expected.
+#6
+%2Let's move out!
+#6
+%
+%
+#4
+!

@@ -1,0 +1,16 @@
+Bugs to fix:
+
+* SERVER - probably should not set i=MAXPLAYERS - may delay dropping players
+* SERVER - unexpected crash when blowing too many things up?
+
+* CLIENT - should probably not connect to a server without getting an ACK
+
+Things to polish:
+(13:24:24) Greg Kennedy: or clouds that appear when you get airborne
+(13:24:39) Greg Kennedy: or colored polygons that shoot out when a vehicle is blown apart
+Parachutes (sprites already checked in)
+Battleship smoke trails
+All those todos, like collision sounds
+Vehicle engine sounds
+screen shake when explosions occur
+Change explosion damage to distance-based, (instead of instakill on hit players) and allow friendlyfire explosions

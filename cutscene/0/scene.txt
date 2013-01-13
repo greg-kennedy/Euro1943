@@ -1,0 +1,27 @@
+*0
+%2The American Flag.
+#2
+%2Emblem of freedom the world over.
+#4
+%2But now, men, your country needs your help.
+#4
+*1
+%2The German Menace is terrorizing our allies in Europe.
+#4
+%2Without our help, the Axis powers will
+%2surely overtake the continent.
+#6
+%2You are the best and strongest aid we can provide.
+#4
+*2
+%2Backed by the best weapons our country can muster...
+#4
+%2Get out there, and beat back those Axis fiends.
+#3
+%2Make Uncle Sam *proud*.
+#6
+*0
+%
+%
+#6
+!

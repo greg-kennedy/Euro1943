@@ -1,0 +1,12 @@
+New to version 1.1b
+* New version of the OverServer allows running on a port other than 5010
+* New texture loader allows much reduced filesizes on .png images
+* Server.exe (and server-linux) moved to top-level directory: maps and txt
+    files are now shared between client and server.
+
+New to version 1.1
+* New version of the OverServer fixes a problem with a three-second delay
+    when there are no registered servers.
+* Fixed a bug that made airborne planes bulletproof in multiplayer
+* Fixed a bug that caused the server to disconnect new players immediately
+* Fixed a (related) bug that caused the server to report incorrect player joins

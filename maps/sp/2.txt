@@ -1,0 +1,17 @@
+1   0 Today we've got to get across this channel.
+20  0 Now, you can swim out there if you want...
+40  0 but I'll be deploying some ships and planes
+60  0   so you can stay dry instead.
+80  0 Do be careful when getting airborne,
+100 0 the controls are touchy.  Use the mouse to
+101 0   steer yourself.  And make sure to avoid
+120 0   trees when you're on the ground, too.
+140 1 Aye, sir!
+180 0 Once we get across the pond, the way is cleared
+181 0   to the primary target: a secret German lab.
+200 0 Intelligence reports that some pretty gruesome
+201 0   experiments are being done there.
+220 0 Rangers will storm the lab and rescue the...
+240 0 uh... the test subjects.
+280 1 I could not feel more *pride* for my country.
+300 1 The army's clearly doing the right thing here.

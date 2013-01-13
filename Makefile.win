@@ -1,0 +1,57 @@
+# Project: euro1943
+# Makefile created by Dev-C++ 4.9.9.2
+
+CPP  = g++.exe
+CC   = gcc.exe
+WINDRES = windres.exe
+RES  = euro1943_private.res
+OBJ  = cutscene.o game.o main.o multimenu.o options.o title.o osc.o winlose.o texops.o $(RES)
+LINKOBJ  = cutscene.o game.o main.o multimenu.o options.o title.o osc.o winlose.o texops.o $(RES)
+LIBS =  -L"C:/Dev-Cpp/lib" -mwindows -lmingw32 -lSDLmain -lSDL -lopengl32 -lSDL_net -lSDL_image -lSDL_mixer  -s -march=i386 
+INCS =  -I"C:/Dev-Cpp/include" 
+CXXINCS =  -I"C:/Dev-Cpp/lib/gcc/mingw32/3.4.2/include"  -I"C:/Dev-Cpp/include/c++/3.4.2/backward"  -I"C:/Dev-Cpp/include/c++/3.4.2/mingw32"  -I"C:/Dev-Cpp/include/c++/3.4.2"  -I"C:/Dev-Cpp/include" 
+BIN  = euro1943.exe
+CXXFLAGS = $(CXXINCS)   -O2 -march=i386
+CFLAGS = $(INCS) -Dmain=SDL_main   -O2 -march=i386
+RM = rm -f
+
+.PHONY: all all-before all-after clean clean-custom
+
+all: all-before euro1943.exe all-after
+
+
+clean: clean-custom
+	${RM} $(OBJ) $(BIN)
+
+$(BIN): $(OBJ)
+	$(CPP) $(LINKOBJ) -o "euro1943.exe" $(LIBS)
+
+cutscene.o: cutscene.cpp
+	$(CPP) -c cutscene.cpp -o cutscene.o $(CXXFLAGS)
+
+game.o: game.cpp
+	$(CPP) -c game.cpp -o game.o $(CXXFLAGS)
+
+main.o: main.cpp
+	$(CPP) -c main.cpp -o main.o $(CXXFLAGS)
+
+multimenu.o: multimenu.cpp
+	$(CPP) -c multimenu.cpp -o multimenu.o $(CXXFLAGS)
+
+options.o: options.cpp
+	$(CPP) -c options.cpp -o options.o $(CXXFLAGS)
+
+title.o: title.cpp
+	$(CPP) -c title.cpp -o title.o $(CXXFLAGS)
+
+osc.o: osc.c
+	$(CPP) -c osc.c -o osc.o $(CXXFLAGS)
+
+winlose.o: winlose.cpp
+	$(CPP) -c winlose.cpp -o winlose.o $(CXXFLAGS)
+
+texops.o: texops.cpp
+	$(CPP) -c texops.cpp -o texops.o $(CXXFLAGS)
+
+euro1943_private.res: euro1943_private.rc 
+	$(WINDRES) -i euro1943_private.rc --input-format=rc -o euro1943_private.res -O coff 

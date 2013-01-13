@@ -1,0 +1,13 @@
+1   1 Commander, what are we doing here?
+20  0 Your objective is to capture the enemy village.
+40  0 Secure the area and report in.
+60  1 But this village is way out of the way!
+80  1 What strategic value does it have?
+100 0 These are your orders.
+120 1 What?  This isn't right!  These are civilians!
+140 1 They aren't even fighting back!
+160 0 Soldier, you will do as you are ordered!
+180 1 ...
+200 0 Follow your orders, soldier!
+240 1 I'm +appalled+... this is horrific.
+260 1 This isn't right...

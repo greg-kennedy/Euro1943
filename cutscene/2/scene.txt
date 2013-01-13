@@ -1,0 +1,22 @@
+*0
+%2Good work on that last battle, men.
+#4
+%2Thanks to your hard fighting,
+%2  we were able to reach the camp.
+#6
+*1
+%2Hundreds of freed prisoners were *overjoyed*
+%2  at the sight of the approaching flag.
+#6
+%2We got here just in time - who knows how
+%2  many would have died if we hadn't made it.
+#6
+*2
+%2We must press on, men.
+#4
+%2The country still needs your aid.
+#4
+%
+%
+#4
+!
