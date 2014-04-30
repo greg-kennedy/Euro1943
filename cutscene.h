@@ -1,10 +1,6 @@
 /* cutscene.h */
 
-#include "common.h"
+#include "common_client.h"
 
-void initcutscene(int);
-void destroycutscene();
-void drawcutscene();
-bool handlecutscene();
+unsigned char do_gs_cutscene();
 
-void chatcutscene (const char *, int);

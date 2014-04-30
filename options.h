@@ -1,8 +1,6 @@
 /* options.h */
 
-#include "common.h"
+#include "common_client.h"
 
-void initoptions();
-void destroyoptions();
-void drawoptions();
-bool handleoptions();
+unsigned char do_gs_options();
+

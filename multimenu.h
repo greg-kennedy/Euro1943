@@ -1,10 +1,6 @@
 /* multimenu.h */
 
-#include "common.h"
+#include "common_client.h"
 
-void initmultimenu();
-void destroymultimenu();
-void drawmultimenu();
-bool handlemultimenu();
-void mmipup (char *message);
-void mmosup ();
+unsigned char do_gs_multimenu();
+

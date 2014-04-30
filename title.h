@@ -1,8 +1,5 @@
 /* title.h */
 
-#include "common.h"
+#include "common_client.h"
 
-void inittitle();
-void destroytitle();
-void drawtitle();
-bool handletitle();
+unsigned char do_gs_title();

@@ -1,13 +1,7 @@
 /* winlose.h */
 
-#include "common.h"
+#include "common_client.h"
 
-void initwin();
-void destroywin();
-void drawwin();
-bool handlewin();
+unsigned char do_gs_win();
+unsigned char do_gs_lose();
 
-void initlose();
-void destroylose();
-void drawlose();
-bool handlelose();

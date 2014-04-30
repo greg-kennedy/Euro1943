@@ -1,57 +1,65 @@
 # Project: euro1943
-# Makefile created by Dev-C++ 4.9.9.2
+# Makefile created by Dev-C++ 5.5.3
 
-CPP  = g++.exe
-CC   = gcc.exe
-WINDRES = windres.exe
-RES  = euro1943_private.res
-OBJ  = cutscene.o game.o main.o multimenu.o options.o title.o osc.o winlose.o texops.o $(RES)
-LINKOBJ  = cutscene.o game.o main.o multimenu.o options.o title.o osc.o winlose.o texops.o $(RES)
-LIBS =  -L"C:/Dev-Cpp/lib" -mwindows -lmingw32 -lSDLmain -lSDL -lopengl32 -lSDL_net -lSDL_image -lSDL_mixer  -s -march=i386 
-INCS =  -I"C:/Dev-Cpp/include" 
-CXXINCS =  -I"C:/Dev-Cpp/lib/gcc/mingw32/3.4.2/include"  -I"C:/Dev-Cpp/include/c++/3.4.2/backward"  -I"C:/Dev-Cpp/include/c++/3.4.2/mingw32"  -I"C:/Dev-Cpp/include/c++/3.4.2"  -I"C:/Dev-Cpp/include" 
-BIN  = euro1943.exe
-CXXFLAGS = $(CXXINCS)   -O2 -march=i386
-CFLAGS = $(INCS) -Dmain=SDL_main   -O2 -march=i386
-RM = rm -f
+CPP      = g++.exe
+CC       = gcc.exe
+WINDRES  = windres.exe
+RES      = euro1943_private.res
+OBJ      = cutscene.o game.o main.o multimenu.o options.o title.o osc.o winlose.o texops.o message.o game_logic.o cfg_parse/cfg_parse.o $(RES)
+LINKOBJ  = cutscene.o game.o main.o multimenu.o options.o title.o osc.o winlose.o texops.o message.o game_logic.o cfg_parse/cfg_parse.o $(RES)
+LIBS     = -L"C:/Program Files (x86)/Dev-Cpp/MinGW32/lib" -L"C:/Program Files (x86)/Dev-Cpp/MinGW32/mingw32/lib" -static-libstdc++ -static-libgcc -mwindows -lmingw32 -lSDLmain -lSDL -lopengl32 -lSDL_net -lSDL_image -lSDL_mixer  -mwindows -s
+INCS     = -I"C:/Program Files (x86)/Dev-Cpp/MinGW32/include"
+CXXINCS  = -I"C:/Program Files (x86)/Dev-Cpp/MinGW32/include" -I"C:/Program Files (x86)/Dev-Cpp/MinGW32/lib/gcc/mingw32/4.7.2/include/c++"
+BIN      = euro1943.exe
+CXXFLAGS = $(CXXINCS) -march=i686 -O2 -Wall -Wextra -mwindows -pipe
+CFLAGS   = $(INCS) -march=i686 -O2 -Wall -Wextra -mwindows -pipe -Dmain=SDL_main
+RM       = rm -f
 
 .PHONY: all all-before all-after clean clean-custom
 
-all: all-before euro1943.exe all-after
-
+all: all-before $(BIN) all-after
 
 clean: clean-custom
 	${RM} $(OBJ) $(BIN)
 
 $(BIN): $(OBJ)
-	$(CPP) $(LINKOBJ) -o "euro1943.exe" $(LIBS)
+	$(CPP) $(LINKOBJ) -o $(BIN) $(LIBS)
 
-cutscene.o: cutscene.cpp
-	$(CPP) -c cutscene.cpp -o cutscene.o $(CXXFLAGS)
+cutscene.o: cutscene.c
+	$(CC) -c cutscene.c -o cutscene.o $(CFLAGS)
 
-game.o: game.cpp
-	$(CPP) -c game.cpp -o game.o $(CXXFLAGS)
+game.o: game.c
+	$(CC) -c game.c -o game.o $(CFLAGS)
 
-main.o: main.cpp
-	$(CPP) -c main.cpp -o main.o $(CXXFLAGS)
+main.o: main.c
+	$(CC) -c main.c -o main.o $(CFLAGS)
 
-multimenu.o: multimenu.cpp
-	$(CPP) -c multimenu.cpp -o multimenu.o $(CXXFLAGS)
+multimenu.o: multimenu.c
+	$(CC) -c multimenu.c -o multimenu.o $(CFLAGS)
 
-options.o: options.cpp
-	$(CPP) -c options.cpp -o options.o $(CXXFLAGS)
+options.o: options.c
+	$(CC) -c options.c -o options.o $(CFLAGS)
 
-title.o: title.cpp
-	$(CPP) -c title.cpp -o title.o $(CXXFLAGS)
+title.o: title.c
+	$(CC) -c title.c -o title.o $(CFLAGS)
 
 osc.o: osc.c
-	$(CPP) -c osc.c -o osc.o $(CXXFLAGS)
+	$(CC) -c osc.c -o osc.o $(CFLAGS)
 
-winlose.o: winlose.cpp
-	$(CPP) -c winlose.cpp -o winlose.o $(CXXFLAGS)
+winlose.o: winlose.c
+	$(CC) -c winlose.c -o winlose.o $(CFLAGS)
 
-texops.o: texops.cpp
-	$(CPP) -c texops.cpp -o texops.o $(CXXFLAGS)
+texops.o: texops.c
+	$(CC) -c texops.c -o texops.o $(CFLAGS)
+
+message.o: message.c
+	$(CC) -c message.c -o message.o $(CFLAGS)
+
+game_logic.o: game_logic.c
+	$(CC) -c game_logic.c -o game_logic.o $(CFLAGS)
+
+cfg_parse/cfg_parse.o: cfg_parse/cfg_parse.c
+	$(CC) -c cfg_parse/cfg_parse.c -o cfg_parse/cfg_parse.o $(CFLAGS)
 
 euro1943_private.res: euro1943_private.rc 
 	$(WINDRES) -i euro1943_private.rc --input-format=rc -o euro1943_private.res -O coff 

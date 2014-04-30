@@ -1,34 +1,23 @@
+/* EURO1943 - GREG KENNEDY
+	http://greg-kennedy.com */
+	
+/* common.h - Declarations common to both Client and Server go here.
+	 This file should be consistent between both (per version), and if something
+	 differs, it probably won't work right. */
+
 #ifndef COMMON_H_
 #define COMMON_H_
 
-//#define PORT 5010
-#define NUM_OBJECTS 30
-#define NUM_BLDS 12
-#define NUM_HUMANS 18
-#define NUM_TILES 16
-#define NUM_BULLETS 17
-#define NUM_PARTICLES 10
-#define NUM_SFX 31
-#define NUM_SPEAKERS 3
+#define VERSION "1.2"
+
+#define DEFAULT_OS_PORT 5009
+#define DEFAULT_OS_HOST "greg-kennedy.com"
+#define DEFAULT_PORT 5010
 
 #define UPDATEFREQ 200
 #define CONTROLFREQ 80
 
-#define NUM_FRAMES 3
-
-#define SCREEN_X 800
-#define SCREEN_Y 600
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <SDL/SDL.h>
-#include <SDL/SDL_opengl.h>
-#include <SDL/SDL_mixer.h>
-#include <SDL/SDL_image.h>
-#include <SDL/SDL_net.h>
-
-#include "math.h"
+#define MAP_X 100
+#define MAP_Y 100
 
 #endif
