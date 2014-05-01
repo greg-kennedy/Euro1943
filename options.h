@@ -2,5 +2,5 @@
 
 #include "common_client.h"
 
-unsigned char do_gs_options();
+char do_gs_options();
 

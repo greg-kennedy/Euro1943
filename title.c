@@ -2,23 +2,24 @@
 
 #include "title.h"
 
-//#include "message.h"
+// Texture operations, and music_play
 #include "texops.h"
 
 // Externs used by this sub-section
-extern unsigned char vol_music, gamestate, network;
+extern unsigned char vol_music, network;
 extern long mx, my;
 extern GLuint list_cursor;
 
-unsigned char do_gs_title()
-{
-	unsigned char retval=1, dirty=1;
+extern int level;
 
+char do_gs_title()
+{
 	// Title init section.
 	//  Load texture from disk.
+	// TODO: This title image is not sharp.  Needs redrawing at 512x512.
 	GLuint tex_title = load_texture("img/ui/title.png",GL_LINEAR,GL_LINEAR);
 	if (!tex_title)
-		return 0;
+		return gs_exit;
 
 	// Make a display list in which we draw a full-screen quad.
 	GLuint list_title = glGenLists(1);
@@ -47,7 +48,13 @@ unsigned char do_gs_title()
 	glDisable(GL_BLEND);
 	glEnable(GL_TEXTURE_2D);
 
-	while (retval && gamestate==gs_title)
+	// MAIN SCREEN LOOP	-- Values used for main loop
+	//  dirty flag: redraw screen when set to 1
+	unsigned char dirty=1;
+	//  retval: when switched away from gs_title, exit screen
+	char retval = gs_title;
+
+	while (retval==gs_title)
 	{
 		if (dirty)
 		{
@@ -68,45 +75,60 @@ unsigned char do_gs_title()
 			dirty = 0;
 
 		}
-		SDL_Event event;
 
 		/* Check for events */
+		SDL_Event event;
 		while (SDL_PollEvent (&event))
 		{
 			switch (event.type)
 			{
-			case SDL_KEYUP:
-				if (event.key.keysym.sym == SDLK_ESCAPE)
-					retval=0;
+				case SDL_KEYUP:
+					// Only key recognized on this screen is ESCAPE, which quits game.
+					if (event.key.keysym.sym == SDLK_ESCAPE)
+						retval=gs_exit;
+					break;
+				case SDL_MOUSEBUTTONUP:
+					if (event.button.x>56 && event.button.x<373)
+					{
+						if (event.button.y>255 && event.button.y<356)
+						{
+							// Begin a single player game: reset level to 0,
+							//  and switch to "cutscene player".
+							level = 0;
+							retval = gs_cutscene;
+						}
+						else if (event.button.y>435 && event.button.y<536)
+						{
+							// Options menu.
+							retval = gs_options;
+						}
+					}
+					else if (event.button.x>424 && event.button.x<741)
+					{
+						if (event.button.y>255 && event.button.y<356 && network)
+						{
+							// Multiplayer menu.  Only usable if network is up.
+							retval = gs_multimenu;
+						}
+						else if (event.button.y>435 && event.button.y<536)
+						{
+							// EXIT button...
+							retval = gs_exit;
+						}
+					}
 				break;
-			case SDL_MOUSEBUTTONUP:
-				if (event.button.x>56 && event.button.x<373)
-				{
-					if (event.button.y>255 && event.button.y<356)
-						gamestate=3; //mission=1;
-					if (event.button.y>435 && event.button.y<536)
-						gamestate=2;
-				}
-				if (event.button.x>424 && event.button.x<741)
-				{
-					if (event.button.y>255 && event.button.y<356)
-						gamestate=1;
-					if (event.button.y>435 && event.button.y<536)
-						retval = 0;
-				}
-				 break;
 			case SDL_MOUSEMOTION:
-				 mx=event.motion.x;
-				 my=event.motion.y;
-				 dirty = 1;
-				 break;
-			case SDL_QUIT:
-				retval = 0;
-				break;
-			case SDL_VIDEOEXPOSE:
+				mx=event.motion.x;
+				my=event.motion.y;
+				// Moving the mouse resets the dirty flag (need to redraw cursor...)
 				dirty = 1;
 				break;
-			default:
+			case SDL_QUIT:
+				retval = gs_exit;
+				break;
+			case SDL_VIDEOEXPOSE:
+				// WM-initiated redraw event
+				dirty = 1;
 				break;
 			}
 		}

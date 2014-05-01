@@ -10,7 +10,7 @@
 #include "osc.h"
 
 // Externs used by this sub-section
-extern unsigned char vol_music, gamestate;
+extern unsigned char vol_music;
 extern long mx, my;
 extern GLuint list_cursor;
 
@@ -26,10 +26,8 @@ static int min(int a, int b)
 	return b;
 }
 
-unsigned char do_gs_multimenu()
+char do_gs_multimenu()
 {
-	unsigned char retval=1, dirty=1;
-
 	// Multimenu init section.
 	int num=0, i;
 	IPaddress *iplist = NULL;
@@ -77,7 +75,11 @@ unsigned char do_gs_multimenu()
 	glDisable(GL_BLEND);
 	glEnable(GL_TEXTURE_2D);
 
-	while (retval && gamestate==gs_multimenu)
+	// dirty flag (needs redraw)
+	unsigned char dirty=1;
+	char retval = gs_multimenu;
+
+	while (retval == gs_multimenu)
 	{
 		if (dirty)
 		{
@@ -141,7 +143,7 @@ unsigned char do_gs_multimenu()
 					        SDL_EnableUNICODE( 0 );
 					}
 					else if (!editingIP && event.key.keysym.sym == SDLK_ESCAPE) {
-						gamestate=gs_title;
+						retval=gs_title;
 					}
 					break;
 				case SDL_KEYDOWN:
@@ -167,8 +169,8 @@ unsigned char do_gs_multimenu()
 
 				        /* Enable Unicode translation */
         				SDL_EnableUNICODE( 1 );
-					} else if (event.button.x > 451 && event.button.x < 749 && event.button.y > 440 && event.button.y < 488) gamestate=10;
-					else if (event.button.x > 451 && event.button.x < 749 && event.button.y > 500 && event.button.y < 549) gamestate=0;
+					} else if (event.button.x > 451 && event.button.x < 749 && event.button.y > 440 && event.button.y < 488) retval = gs_game;
+					else if (event.button.x > 451 && event.button.x < 749 && event.button.y > 500 && event.button.y < 549) retval = gs_title;
 					else if (event.button.x > 51 && event.button.x < 399 && event.button.y > 155 && event.button.y < 544 && num>0)
 					{
 						picked_server = min((event.button.y - 155) / 10, num - 1);
@@ -186,7 +188,7 @@ unsigned char do_gs_multimenu()
 				 dirty = 1;
 				 break;
 			case SDL_QUIT:
-				retval = 0;
+				retval = gs_exit;
 				break;
 			case SDL_VIDEOEXPOSE:
 				dirty = 1;

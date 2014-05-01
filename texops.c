@@ -10,7 +10,7 @@ extern char vol_music;
  *
  */
 
-int powerOfTwo( int value )
+static int powerOfTwo( int value )
 {
 	int result = 1 ;
 	while ( result < value )
@@ -18,6 +18,18 @@ int powerOfTwo( int value )
 	return result ;		
 }
 
+// Draws a textured box.
+void glBox (int x, int y, int w, int h)
+{
+	glTexCoord2f(0,0);
+	glVertex2i(x, y);
+	glTexCoord2f(1,0);
+	glVertex2i(x+w, y);
+	glTexCoord2f(1,1);
+	glVertex2i(x+w, y+h);
+	glTexCoord2f(0,1);
+	glVertex2i(x, y+h);
+}
 
 GLuint load_texture(const char *fname, GLuint min_filt, GLuint max_filt)
 {

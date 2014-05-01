@@ -2,6 +2,6 @@
 
 #include "common_client.h"
 
-unsigned char do_gs_win();
-unsigned char do_gs_lose();
+char do_gs_win();
+char do_gs_lose();
 

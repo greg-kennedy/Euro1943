@@ -4,14 +4,12 @@
 #include "texops.h"
 
 // Externs used by this sub-section
-extern unsigned char vol_music, vol_sfx, gamestate;
+extern unsigned char vol_music, vol_sfx;
 extern long mx, my;
 extern GLuint list_cursor;
 
-unsigned char do_gs_options()
+char do_gs_options()
 {
-	unsigned char retval=1, dirty=1;
-
 	// options init section.
 	//  Load texture from disk.
 	GLuint tex_options = load_texture("img/ui/options.png",GL_LINEAR,GL_LINEAR);
@@ -62,7 +60,11 @@ unsigned char do_gs_options()
 	glDisable(GL_BLEND);
 	glEnable(GL_TEXTURE_2D);
 
-	while (retval && gamestate==gs_options)
+	// dirty flag: redraw screen
+	unsigned char dirty=1;
+	char retval = gs_options;
+
+	while (retval == gs_options)
 	{
 		if (dirty)
 		{
@@ -94,7 +96,7 @@ unsigned char do_gs_options()
 			{
 			case SDL_KEYUP:
 				if (event.key.keysym.sym == SDLK_ESCAPE)
-					gamestate = gs_title;
+					retval = gs_title;
 				break;
 			case SDL_MOUSEBUTTONUP:
 				if (event.button.x>286 && event.button.x<522 && event.button.y > 239 && event.button.y < 277)
@@ -111,7 +113,7 @@ unsigned char do_gs_options()
 					dirty = 1;
 				}
 				else if (event.button.x>291 && event.button.x<512 && event.button.y > 511 && event.button.y < 591)
-					gamestate = gs_title;
+					retval = gs_title;
 				break;
 			case SDL_MOUSEMOTION:
 				 mx=event.motion.x;
@@ -119,7 +121,7 @@ unsigned char do_gs_options()
 				 dirty = 1;
 				 break;
 			case SDL_QUIT:
-				retval = 0;
+				retval = gs_exit;
 				break;
 			case SDL_VIDEOEXPOSE:
 				dirty = 1;

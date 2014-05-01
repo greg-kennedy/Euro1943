@@ -10,7 +10,7 @@
 // how many frames make up a cutscene
 #define NUM_FRAMES 3
 
-extern unsigned char vol_music, gamestate;
+extern unsigned char vol_music;
 
 // Pull external "level" value from game.cpp
 extern unsigned int level;
@@ -25,22 +25,19 @@ enum cutscene_action
 	CS_END
 };
 
-unsigned char do_gs_cutscene()
+char do_gs_cutscene()
 {
-	unsigned char retval=1;
 	char buffer[64];
 
 	// cutscene script
 	enum cutscene_action script_action[40];
 	char script_param[40][80];
 
-	int level = 0;
-
 	// Cutscene screen init section.
 	//  First up, load the cutscene script.
 	sprintf(buffer,"cutscene/%d/scene.txt",level);
 	FILE *fp = fopen(buffer,"r");
-	if (fp == NULL) { gamestate = 10; return 1; }
+	if (fp == NULL) { return gs_title; }
 	int i = 0;
 	while (!feof(fp) && i < 40)
 	{
@@ -153,10 +150,14 @@ unsigned char do_gs_cutscene()
 	unsigned int script_ticks;
 	unsigned int film_ticks = script_ticks = SDL_GetTicks();
 
+	// clear the message box
+	message_clear();
+
 	// dirty (partial screen redraw)
 	unsigned char dirty = 1;
+	char retval = gs_cutscene;
 
-	while (retval && gamestate==gs_cutscene)
+	while (retval==gs_cutscene)
 	{
 		// Timed events.
 		unsigned int ticks = SDL_GetTicks();
@@ -186,10 +187,11 @@ unsigned char do_gs_cutscene()
 					break;
 				case CS_END:
 					if (level > 3)
-						gamestate=gs_title;
+						retval=gs_title;
 					else
-						gamestate=gs_game;
+						retval=gs_game;
 					break;
+				case CS_DEFAULT:
 				default:
 					break;
 			}
@@ -223,24 +225,22 @@ unsigned char do_gs_cutscene()
 				case SDL_KEYUP:
 					if (event.key.keysym.sym == SDLK_ESCAPE) {
 						if (level > 3)
-							gamestate=gs_title;
+							retval=gs_title;
 						else
-							gamestate=gs_game;
+							retval=gs_game;
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
 					if (level > 3)
-						gamestate=gs_title;
+						retval=gs_title;
 					else
-						gamestate=gs_game;
+						retval=gs_game;
 					break;
 				case SDL_QUIT:
-					retval = 0;
+					retval = gs_exit;
 					break;
 				case SDL_VIDEOEXPOSE:
 					dirty = 1;
-					break;
-				default:
 					break;
 			}
 		}
@@ -257,8 +257,6 @@ unsigned char do_gs_cutscene()
 	glDeleteLists(list_film, 1);
 	glDeleteTextures( NUM_FRAMES, tex_frame );
 	glDeleteTextures( 2, tex_film );
-
-//	level++;
 
 	return retval;
 }

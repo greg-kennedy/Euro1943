@@ -1,6 +1,6 @@
 /* EURO1943 - GREG KENNEDY
 	http://greg-kennedy.com */
-	
+
 /* main.cpp - game flow goes here! */
 
 // common file includes
@@ -29,17 +29,7 @@
 // message-box (speech bubble)
 #include "message.h"
 
-// Defines - help to prettify the main loop.
-#define state_func(X) isDone = do_ ## X ();
-#define switch_state(X) case X: \
-	isRunning = do_ ## X (); \
-	break;
-
 // Global variables, shared across multiple subsystems.
-// Holds current gamestate.  Change this from within a subsystem, and
-//  the current sub-state will shut down, while the next will start.
-unsigned char gamestate;
-
 // Holds music and sound effect volume.  Set to 0 to disable.
 unsigned char vol_music, vol_sfx;
 // Is the network OK?
@@ -48,8 +38,12 @@ unsigned char network;
 char OS_LOC[80];
 unsigned short OS_PORT;
 
-// Font surface.
-//SDL_Surface *font;
+// Is this a multiplayer game?
+int multiplayer;
+// Which level are we on?
+int level;
+// Who are we connected to?
+char HOSTNAME[80];
 
 // Mouse X / Y position.
 long mx=0, my=0;
@@ -102,10 +96,12 @@ static struct cfg_struct *cfg_setup()
 	return cfg;
 }
 
+////////////
+// Init core items.
 static int core_init(struct cfg_struct *cfg)
 {
 	// Initialize SDL
-	if(SDL_Init(SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_VIDEO) == -1){
+	if(SDL_Init(SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_VIDEO) == -1) {
 		fprintf(stderr, "Failed to initialize SDL: %s\n", SDL_GetError());
 		return EXIT_FAILURE;
 	}
@@ -129,7 +125,7 @@ static int core_init(struct cfg_struct *cfg)
 		fprintf(stderr,"Mix_Init: %s\n", Mix_GetError());
 		vol_music = 0;
 	}
-	
+
 	/* Initialize SDL_net */
 	// Network support is needed for multiplayer games.
 	//  If for some reason that doesn't work, still allow single player.
@@ -155,7 +151,7 @@ static int core_init(struct cfg_struct *cfg)
 	SDL_EventState(SDL_VIDEORESIZE, SDL_IGNORE);
 	SDL_EventState(SDL_SYSWMEVENT, SDL_IGNORE);
 	SDL_EventState(SDL_USEREVENT, SDL_IGNORE);
-	
+
 	return EXIT_SUCCESS;
 }
 
@@ -251,7 +247,7 @@ static int video_init(struct cfg_struct *cfg)
 
 	//glShadeModel(GL_SMOOTH);
 	//glDisable(GL_CULL_FACE);
-//	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST); 
+//	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
 
 	glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
 
@@ -329,7 +325,6 @@ static int shared_resource_init()
 
 	// Make a display list for the mouse cursor.
 	list_cursor = glGenLists(1);
-
 	glNewList(list_cursor, GL_COMPILE);
 		// enable alpha test for simple transparency
 		glEnable(GL_ALPHA_TEST);
@@ -380,13 +375,16 @@ static void core_quit()
 	SDL_Quit();
 }
 
+// Defines - help to prettify the main loop.
+//#define state_func(X) isDone = do_ ## X ();
+#define switch_state(X) case X: \
+	gamestate = do_ ## X (); \
+	break;
+
 int main(int argc, char *argv[])
 {
 	// boilerplate startup message
 	printf("Euro1943 - v%s\nGreg Kennedy 2013\n\n", VERSION);
-
-	// Set to 0 and the game will shut down.
-	unsigned char isRunning = 1;
 
 	// .ini file configuration
 	// Pointer to a cfg_struct structure
@@ -404,9 +402,11 @@ int main(int argc, char *argv[])
 			// Load basic (globally shared) resources.
 			if (!shared_resource_init())
 			{
-				gamestate = gs_title;
+				// Holds current gamestate.  Change this from within a subsystem, and
+				//  the current sub-state will shut down, while the next will start.
+				char gamestate = gs_title;
 				
-				while(isRunning == 1)
+				while(gamestate != gs_exit)
 				{
 					switch(gamestate)
 					{
@@ -418,7 +418,7 @@ int main(int argc, char *argv[])
 						switch_state(gs_lose);
 						switch_state(gs_game);
 						default:
-							isRunning=0;
+							gamestate = gs_exit;
 							fprintf(stderr, "Error:  Game reached unknown gamestate %d.\n",gamestate);
 					}
 				}

@@ -2,19 +2,17 @@
 
 #include "winlose.h"
 
+// Texture operations, and music_play
 #include "texops.h"
 
 // Externs used by this sub-section
-extern unsigned char vol_music, gamestate;
+extern unsigned char vol_music;
+
+extern int level;
 
 // Shared function for full-screen win/loss display, with music
-static unsigned char win_lose(const char *tex_name, const char *mus_name)
+static char win_lose(const char *tex_name, const char *mus_name, char current_gamestate, char next_gamestate)
 {
-	unsigned char retval=1, dirty=1;
-
-	// track current gamestate
-	int gs = gamestate;
-
 	// Screen init section.
 	//  Load texture from disk.
 	GLuint tex_win = load_texture(tex_name,GL_LINEAR,GL_LINEAR);
@@ -46,7 +44,15 @@ static unsigned char win_lose(const char *tex_name, const char *mus_name)
 	// bind VICTORY quad texture
 	glBindTexture(GL_TEXTURE_2D, tex_win);
 
-	while (retval && gamestate==gs)
+	// MAIN SCREEN LOOP	-- Values used for main loop
+	//  dirty flag: redraw screen when set to 1
+	unsigned char dirty=1;
+	//  retval: when switched away from 0, exit screen
+	//    positive value is next gamestate
+	//    negative value is gs_exit.
+	char retval = current_gamestate;
+
+	while (retval == current_gamestate)
 	{
 		if (dirty)
 		{
@@ -58,24 +64,21 @@ static unsigned char win_lose(const char *tex_name, const char *mus_name)
 			dirty = 0;
 		}
 
-		SDL_Event event;
-
 		/* Check for events */
+		SDL_Event event;
 		while (SDL_PollEvent (&event))
 		{
 			switch (event.type)
 			{
 				case SDL_KEYUP:
 				case SDL_MOUSEBUTTONUP:
-					gamestate=3;
+					retval = next_gamestate;
 					break;
 				case SDL_QUIT:
-					retval = 0;
+					retval = gs_exit;
 					break;
 				case SDL_VIDEOEXPOSE:
 					dirty = 1;
-					break;
-				default:
 					break;
 			}
 		}
@@ -94,13 +97,13 @@ static unsigned char win_lose(const char *tex_name, const char *mus_name)
 	return retval;
 }
 
-unsigned char do_gs_win()
+char do_gs_win()
 {
-	return win_lose("img/ui/v.png","audio/win.mod");
+	return win_lose("img/ui/v.png","audio/win.mod", gs_win, gs_cutscene);
 }
 
-unsigned char do_gs_lose()
+char do_gs_lose()
 {
-	return win_lose("img/ui/d.png","audio/lose.mod");
+	return win_lose("img/ui/d.png","audio/lose.mod", gs_lose, gs_title);
 }
 

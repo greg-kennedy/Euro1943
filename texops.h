@@ -3,7 +3,9 @@
 
 #include "common_client.h"
 
-int powerOfTwo( int  );
+void glBox(int x, int y, int w, int h);
+
+// int powerOfTwo( int  );
 GLuint load_texture (const char *, GLuint, GLuint);
 
 // music handler functions

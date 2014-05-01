@@ -18,6 +18,8 @@
 #define SCREEN_Y 600
 
 // gamestates
+#define	gs_exit -1
+
 #define	gs_title 0
 #define gs_multimenu 1
 #define gs_options 2
