@@ -19,7 +19,7 @@
 #define NUM_HUMANS 18
 #define NUM_TILES 16
 #define NUM_BULLETS 17
-#define NUM_PARTICLES 10
+#define NUM_PARTICLES 4
 #define NUM_SFX 31
 
 // got some externs here
@@ -56,6 +56,7 @@ Mix_Chunk *sfx[NUM_SFX];
 // GL texture objects
 GLuint tex_object[ NUM_OBJECTS ];
 GLuint tex_bldg[ NUM_BLDGS ];
+int bldg_w[ NUM_BLDGS ], bldg_h[ NUM_BLDGS ];
 GLuint tex_human[ NUM_HUMANS ];
 GLuint tex_tile[ NUM_TILES+4 ];
 GLuint tex_bullet[ NUM_BULLETS ];
@@ -77,7 +78,7 @@ GLuint list_tree;
 GLuint list_map;
 GLuint list_minimap;
 GLuint list_bullet[ NUM_BULLETS ];
-GLuint list_particle[ NUM_PARTICLES ];
+GLuint list_particle;
 GLuint list_hud;
 GLuint list_hqmenu;
 GLuint list_digit;
@@ -187,10 +188,19 @@ static void game_load()
 		tex_hud[i] = load_texture(buffer,GL_NEAREST,GL_NEAREST);
 	}
 
+	// for the particles.
+	list_particle = glGenLists(NUM_PARTICLES);
 	for (i=0; i<NUM_PARTICLES; i++)
 	{
 		sprintf(buffer,"img/particle/%d.png",i);
 		tex_particle[i] = load_texture(buffer,GL_NEAREST,GL_NEAREST);
+
+		glNewList(list_particle+i, GL_COMPILE);
+		glBindTexture(GL_TEXTURE_2D, tex_particle[i]); 
+		glBegin(GL_QUADS);
+			glBox(-8,-8,8,8);
+		glEnd();
+		glEndList();
 	}
 
 	for (i=0; i<NUM_TILES+4; i++)
@@ -220,7 +230,7 @@ static void game_load()
 	for (i=0; i<NUM_BLDGS; i++)
 	{
 		sprintf(buffer,"img/bldg/%d.png",i);
-		tex_bldg[i] = load_texture(buffer,GL_NEAREST,GL_NEAREST);
+		tex_bldg[i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST,&bldg_w[i],&bldg_h[i]);
 
 /*		bldw[i]=surf->w;
 		bldh[i]=surf->h; */
@@ -290,7 +300,7 @@ static void game_load()
 	}
 
 //	showmoney = 0;
-//iSeeAll = 1;
+iSeeAll = 1;
 
 	/*	frames = 0;
 	fpsticks = SDL_GetTicks();
@@ -562,6 +572,19 @@ static void draw_map()
 			}
 			if (any_tiles) glEnd();
 		}
+
+// Buildings
+		for (i = 0; i < 15; i ++)
+		{
+			unsigned char type = bldloc[i][0];
+			if (type || i<4)
+			{
+				glBindTexture(GL_TEXTURE_2D, tex_bldg[type]);
+				glBegin(GL_QUADS);
+					glBox(32 * bldloc[i][1] - (bldg_w[type] / 2),32 * bldloc[i][2] - (bldg_h[type] / 2),bldg_w[type],bldg_h[type]);
+				glEnd();				
+			}
+		}
 	}
 	glEndList();
 
@@ -694,32 +717,13 @@ static char load_map(const char* name)
 		}
 	}
 
-/*	for (i=0; i<15; i++)
+	for (i=0; i<15; i++)
 	{
 		for (j=0; j<3; j++)
 		{
 			bldloc[i][j] = (int)fgetc(fp);
 		}
-		if (bldloc[i][0] == 0 && i < 5)
-           pcolor = SDL_MapRGB(ts->format,255,0,0);
-		else if (bldloc[i][0] != 0)
-           pcolor = SDL_MapRGB(ts->format,0,0,0);
-        else
-           pcolor = 1;
-        
-        if (pcolor != 1)
-        {
-		   ts_pix[(bldloc[i][2]-1)*128+bldloc[i][1]-1] = pcolor;
-		   ts_pix[(bldloc[i][2]-1)*128+bldloc[i][1]] = pcolor;
-		   ts_pix[(bldloc[i][2]-1)*128+bldloc[i][1]+1] = pcolor;
-		   ts_pix[(bldloc[i][2])*128+bldloc[i][1]-1] = pcolor;
-		   ts_pix[(bldloc[i][2])*128+bldloc[i][1]] = pcolor;
-		   ts_pix[(bldloc[i][2])*128+bldloc[i][1]+1] = pcolor;
-		   ts_pix[(bldloc[i][2]+1)*128+bldloc[i][1]-1] = pcolor;
-		   ts_pix[(bldloc[i][2]+1)*128+bldloc[i][1]] = pcolor;
-		   ts_pix[(bldloc[i][2]+1)*128+bldloc[i][1]+1] = pcolor;
-        }
-      }*/
+   }
 /*		initang[0] = (unsigned char)fgetc(fp);
 	initang[1] = (unsigned char)fgetc(fp);*/
 	fclose(fp);
@@ -758,7 +762,7 @@ static int game_connect()
 {
 	int i;
 	//char buffer[80];
-	char map_name[80] = "maps/x-isle.map";
+	char map_name[80] = "maps/bridge.map";
 
 	if (multiplayer)
 	{
@@ -795,13 +799,13 @@ static int game_connect()
 	{
 		// need to start up a local engine.
 
-		sprintf(map_name,"maps/sp/%d.map",level);
+//		sprintf(map_name,"maps/sp/%d.map",level);
 
 		init_game(map_name);
 	}
 
 	abase=1; nbase=1; health=100; ammo=30;cash[0]=cash[1]=500;
-
+ 
 	// Client load map.
 	return load_map(map_name);
 
@@ -892,8 +896,8 @@ static void game_draw()
 	{
 		startx = 0;
 		endx = 4267;
-		starty = 0;
-		endy = 3200;
+		starty = 3200;
+		endy = 0;
 	}
 	else
 	{
@@ -905,6 +909,8 @@ static void game_draw()
 		endx = (int)(SCREEN_X / 2 + gz4);
 		starty = (int)(SCREEN_Y / 2 - gz3);
 		endy = (int)(SCREEN_Y / 2 + gz3);
+
+		glTranslatef(-1600,-1600,0);
 	}
 
 	glMatrixMode(GL_PROJECTION);
@@ -916,7 +922,6 @@ static void game_draw()
 
 //	glLoadIdentity();
 
-	glTranslatef(-1600,-1600,0);
 //	locatecamera(&camx,&camy);
 
 	// Draw trees and landscapes.
@@ -930,12 +935,12 @@ static void game_draw()
 	// Projectiles
 
 	// Particles
-	partptr=toppart;
+	/*partptr=toppart;
 	while (partptr!=NULL)
 	{
 		drawgame_particle(partptr);
 		partptr=partptr->next;
-	} 
+	} */
 
 	// Time to draw the UI.
 	//gotta go back to the old way to draw the cursor right size, and UI.

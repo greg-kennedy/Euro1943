@@ -33,13 +33,21 @@ void glBox (int x, int y, int w, int h)
 
 GLuint load_texture(const char *fname, GLuint min_filt, GLuint max_filt)
 {
+	int w,h;
+	return load_texture_extra(fname,min_filt,max_filt,&w,&h);
+}
+
+GLuint load_texture_extra(const char *fname, GLuint min_filt, GLuint max_filt, int *orig_w, int *orig_h)
+{
+	int w,h;
 	GLuint tex = 0;
-	int w, h;
 
 	SDL_Surface *temp_surf = NULL;
 	SDL_Surface *file_surf = IMG_Load(fname);
 	if (file_surf == NULL) { printf("Error loading texture '%s': %s\n",fname,IMG_GetError()); return 0; }
 
+	*orig_w = file_surf->w;
+	*orig_h = file_surf->h;
 	w = powerOfTwo(file_surf->w);
 	h = powerOfTwo(file_surf->h);
 	if (file_surf->flags & (SDL_SRCALPHA | SDL_SRCCOLORKEY)) {
