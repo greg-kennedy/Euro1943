@@ -74,8 +74,7 @@ GLuint load_texture_extra(const char *fname, GLuint min_filt, GLuint max_filt, i
 
 		glGenTextures( 1, &tex );
 		glBindTexture( GL_TEXTURE_2D, tex );
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_filt);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, max_filt);
+
 		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP ) ;
 		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP ) ;
 
@@ -99,13 +98,17 @@ GLuint load_texture_extra(const char *fname, GLuint min_filt, GLuint max_filt, i
 		if (temp_surf == NULL) { printf("Error creating 24bit surface for '%s': %s\n",fname,SDL_GetError()); free(file_surf); return 0; }
 		SDL_BlitSurface(file_surf,NULL,temp_surf,NULL);
 		SDL_FreeSurface(file_surf);
+
 		glGenTextures( 1, &tex );
 		glBindTexture( GL_TEXTURE_2D, tex );
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_filt);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, max_filt);
+
 		glTexImage2D(GL_TEXTURE_2D, 0, 3, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, temp_surf->pixels);
 		SDL_FreeSurface(temp_surf);
 	}
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_filt);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, max_filt);
+
 	return tex;
 }
 

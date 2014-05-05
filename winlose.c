@@ -23,14 +23,7 @@ static char win_lose(const char *tex_name, const char *mus_name, char current_ga
 	GLuint list_win = glGenLists(1);
 	glNewList(list_win, GL_COMPILE);
 	   	glBegin(GL_QUADS);
-			glTexCoord2f(0,0);
-			glVertex2i(0, 0);
-			glTexCoord2f(1,0);
-			glVertex2i(SCREEN_X, 0);
-			glTexCoord2f(1,1);
-			glVertex2i(SCREEN_X, SCREEN_Y);
-			glTexCoord2f(0,1);
-			glVertex2i(0, SCREEN_Y);
+			glBox(0,0,SCREEN_X,SCREEN_Y);
 		glEnd();
 	glEndList();
 

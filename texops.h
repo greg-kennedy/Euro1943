@@ -3,6 +3,9 @@
 
 #include "common_client.h"
 
+#include <SDL/SDL_opengl.h>
+#include <SDL/SDL_mixer.h>
+
 void glBox(int x, int y, int w, int h);
 
 // int powerOfTwo( int  );

@@ -28,7 +28,7 @@
 #define gs_lose 5
 #define gs_game 10
 
-#include <stdio.h>
+/*#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -36,6 +36,6 @@
 #include <SDL/SDL_opengl.h>
 #include <SDL/SDL_mixer.h>
 #include <SDL/SDL_image.h>
-#include <SDL/SDL_net.h>
+#include <SDL/SDL_net.h>*/
 
 #endif

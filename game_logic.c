@@ -3,41 +3,54 @@
 
 #include "game_logic.h"
 
-void simulategame()
-{
-}
 
-void init_game()
-{
-}
+static unsigned long frame;
 
-void shutdown_game()
-{
-}
+// Money settings
+#define CASH_START 500
+static short cash[2];
 
-/*
-void simulategame()
+#define CASH_FREQ 5
+#define CASH_UPKEEP -2
+#define CASH_POINT 4
+static unsigned char cash_frame;
+
+// Capture point info
+static unsigned char cap_point[3];
+
+
+// Performs all game simulation.
+void update_game()
 {
-	struct gameobj *objptr=topobject, *drill, *nxobj;
+/*	struct gameobj *objptr=topobject, *drill, *nxobj;
 	struct human *humptr=tophuman, *h2;
 	projectile *projptr=topproj, *pp2;
 	int i, vehid,j,landed;
 	int oldx, oldy;
 	float dist, tangle2, tx, ty, tx2, ty2;
-	unsigned char tangle;
+	unsigned char tangle; */
+	int i;
 
-	cashmoney++;
-	if (cashmoney > 4) {
-		cash[0]-=2;  //upkeep
-		cash[1]-=2;
-		if (bldloc[0][0] == 8) cash[0]+=4; else if (bldloc[0][0] == 9) cash[1]+=4;
-		if (bldloc[1][0] == 8) cash[0]+=4; else if (bldloc[1][0] == 9) cash[1]+=4;
-		if (bldloc[2][0] == 8) cash[0]+=4; else if (bldloc[2][0] == 9) cash[1]+=4;
-		cashmoney = 0;
+	// Increment global frame number.
+	frame ++;
+
+	// Money handling.  Cash frame increments each tick.  Every five frames, money is incremented.
+	cash_frame++;
+	while (cash_frame >= CASH_FREQ)
+	{
+		cash[0] += CASH_UPKEEP;  //upkeep
+		cash[1] += CASH_UPKEEP;  //upkeep
+		for (i = 0; i < 3; i++)
+		{
+			if (cap_point[i] == 1) cash[0] += CASH_POINT; else if (cap_point[i] == 2) cash[1] += CASH_POINT;
+		}
+		cash_frame -= CASH_FREQ;
 	}
 
+	// Check for game over here.
 	if (cash[0] <=0 || cash[1] <= 0)
 	{
+		/*
 		for (i=0; i<MAX_PLAYERS; i++)
 		{
 			if (players[i].status == 3) {
@@ -81,10 +94,10 @@ void simulategame()
 		   mapnum++;
 		   if (mapnum >= maxmapnum) mapnum = 0;
 		   mapchange(mapnum);
-		}
+		}*/
 	} else {
-
-		humptr=tophuman;
+		// Iterate through each object, and update its settings.
+		/*humptr=tophuman;
 		while (humptr!=NULL)
 		{
 			oldx = humptr->x;
@@ -608,7 +621,33 @@ void simulategame()
 		}
 
 		killhuman(0); // hack: remove all humans with 0 health.
-		destroyvehicle(0); // hack: remove all vehicles with 0 health.
+		destroyvehicle(0); // hack: remove all vehicles with 0 health.*/
 	}
 }
-*/
+
+void init_game()
+{
+	// Reset everything from scratch.
+	frame = 0;
+	cash[0] = cash[1] = CASH_START;
+	cap_point[0] = cap_point[1]	= cap_point[2] = 0;
+}
+
+void shutdown_game()
+{
+}
+
+void control_game_regular(int id, unsigned char controls[])
+{
+	
+}
+
+void control_game_hq(int id, unsigned char controls[])
+{
+}
+
+unsigned char *serialize_game(int id)
+{
+	//return NULL;
+}
+

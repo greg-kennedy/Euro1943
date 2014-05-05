@@ -152,14 +152,7 @@ int message_init()
 		glEnable(GL_ALPHA_TEST);
 		glBindTexture(GL_TEXTURE_2D, tex_bubble);
 		glBegin(GL_QUADS);
-			glTexCoord2f(0,0);
-			glVertex2i(144, SCREEN_Y - 32);
-			glTexCoord2f(1,0);
-			glVertex2i(SCREEN_X - 144, SCREEN_Y - 32);
-			glTexCoord2f(1,1);
-			glVertex2i(SCREEN_X - 144, SCREEN_Y);
-			glTexCoord2f(0,1);
-			glVertex2i(144, SCREEN_Y);
+			glBox(144,SCREEN_Y-32,SCREEN_X-288,32);
 		glEnd();
 	glEndList();
 
@@ -167,14 +160,7 @@ int message_init()
 	list_speaker = glGenLists(1);
 	glNewList(list_speaker, GL_COMPILE);
 		glBegin(GL_QUADS);
-			glTexCoord2f(0,0);
-			glVertex2i(144, SCREEN_Y - 32);
-			glTexCoord2f(1,0);
-			glVertex2i(144 + 32, SCREEN_Y - 32);
-			glTexCoord2f(1,1);
-			glVertex2i(144 + 32, SCREEN_Y);
-			glTexCoord2f(0,1);
-			glVertex2i(144, SCREEN_Y);
+			glBox(144,SCREEN_Y-32,32,32);
 		glEnd();
 	glEndList();
 
@@ -194,7 +180,7 @@ int message_init()
 void message_clear()
 {
 	msg_speaker = -1;
-	memset(msg_line,240,'\0');
+	memset(msg_line,'\0',240);
 }
 
 void message_post(int speaker, const char *message)

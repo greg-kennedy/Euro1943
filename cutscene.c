@@ -121,14 +121,7 @@ char do_gs_cutscene()
 	GLuint list_frame = glGenLists(1);
 	glNewList(list_frame, GL_COMPILE);
 	   	glBegin(GL_QUADS);
-			glTexCoord2f(0,0);
-			glVertex2i(128, 0);
-			glTexCoord2f(1,0);
-			glVertex2i(SCREEN_X - 128, 0);
-			glTexCoord2f(1,1);
-			glVertex2i(SCREEN_X - 128, SCREEN_Y);
-			glTexCoord2f(0,1);
-			glVertex2i(128, SCREEN_Y);
+	   		glBox(128,0,SCREEN_X-256,SCREEN_Y);
 		glEnd();
 	glEndList();
 
