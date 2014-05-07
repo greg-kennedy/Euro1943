@@ -201,7 +201,7 @@ OverrideBuildCmd=0
 BuildCmd=
 
 [Unit17]
-FileName=texops.c
+FileName=function.c
 CompileCpp=0
 Folder=
 Compile=1
@@ -211,7 +211,7 @@ OverrideBuildCmd=0
 BuildCmd=
 
 [Unit18]
-FileName=texops.h
+FileName=function.h
 CompileCpp=1
 Folder=
 Compile=1
