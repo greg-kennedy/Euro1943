@@ -1,11 +1,8 @@
 /* multimenu.cpp - multiplayer game menu */
-
 #include "multimenu.h"
+
+// Texture operations
 #include "texops.h"
-
-// used to draw text on screen
-#include "message.h"
-
 // used by Overserver
 #include "osc.h"
 

@@ -1,6 +1,7 @@
 /* options.cpp - set some game options */
-
 #include "options.h"
+
+// Texture operations + music
 #include "texops.h"
 
 // Externs used by this sub-section

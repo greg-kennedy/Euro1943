@@ -11,6 +11,7 @@
 #include <math.h>
 
 // other SDL includes
+#include <SDL/SDL.h>
 #include <SDL/SDL_net.h>
 
 // game logics
@@ -200,8 +201,6 @@ static void game_load()
 {
 	unsigned int i;
 	char buffer[80];
-
-	srand(time(NULL));
 
 	glGenTextures( NUM_TILES+4, tex_tile );
 	glGenTextures( NUM_BLDGS, tex_bldg );
@@ -1164,7 +1163,7 @@ static void game_draw()
 	// Draw HUD
 	glCallList(list_hud);
 	// HUD items (numbers)
-	unsigned int base = 0;
+	//unsigned int base = 0;
 	draw_number(abase,40,0);
 	draw_number(nbase,120,0);
 	draw_number(ammo,40,40);

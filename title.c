@@ -1,5 +1,4 @@
 /* title.cpp - title and main menu */
-
 #include "title.h"
 
 // Texture operations, and music_play

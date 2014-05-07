@@ -1,5 +1,7 @@
 /* game_logic.h
 	shared game logic used by either client or server */
+#ifndef GAME_LOGIC_H_
+#define GAME_LOGIC_H_
 
 #include "common.h"
 
@@ -17,3 +19,5 @@ void control_game_hq(int, unsigned char controls[]);
 
 // Serialise game status, customized to a player
 unsigned char *serialize_game(int);
+
+#endif

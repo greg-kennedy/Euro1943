@@ -9,6 +9,11 @@
 // config-file parser
 #include "cfg_parse/cfg_parse.h"
 
+// texture operations
+#include "texops.h"
+// message-box (speech bubble)
+#include "message.h"
+
 // one include file per game section
 //  title screen
 #include "title.h"
@@ -23,11 +28,8 @@
 //  win or loss screen
 #include "winlose.h"
 
-// texture operations
-#include "texops.h"
-
-// message-box (speech bubble)
-#include "message.h"
+// Other system-wide includes
+#include <time.h>
 
 // Global variables, shared across multiple subsystems.
 // Holds music and sound effect volume.  Set to 0 to disable.
@@ -344,6 +346,7 @@ static int shared_resource_init()
 	glEndList();
 
 	// Set up message box.
+	glFontInit();
 	if (message_init()) return EXIT_FAILURE;
 
 	return EXIT_SUCCESS;
@@ -352,6 +355,7 @@ static int shared_resource_init()
 static void shared_resource_quit()
 {
 	message_quit();
+	glFontQuit();
 
 	glDeleteLists(list_cursor, 1);
 	glDeleteTextures( 1, &tex_cursor );
@@ -385,6 +389,8 @@ int main(int argc, char *argv[])
 {
 	// boilerplate startup message
 	printf("Euro1943 - v%s\nGreg Kennedy 2013\n\n", VERSION);
+
+	srand(time(NULL));
 
 	// .ini file configuration
 	// Pointer to a cfg_struct structure

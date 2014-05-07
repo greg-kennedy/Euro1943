@@ -5,12 +5,6 @@
 
 #include "common_client.h"
 
-#define NUM_SPEAKERS 3
-
-#include <SDL/SDL_opengl.h>
-
-GLvoid glPrint(GLshort x, GLshort y, const char *text);
-
 int message_init();
 
 void message_clear();

@@ -1,5 +1,4 @@
 /* winlose.cpp - win and lose screens */
-
 #include "winlose.h"
 
 // Texture operations, and music_play

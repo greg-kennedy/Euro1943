@@ -3,35 +3,33 @@
 
 // messagebox (speech bubble) used on this screen
 #include "message.h"
-
 // texture operations, also music_play
 #include "texops.h"
 
 // how many frames make up a cutscene
 #define NUM_FRAMES 3
 
-extern unsigned char vol_music;
-
-// Pull external "level" value from game.cpp
-extern unsigned int level;
+// how long can the script be
+#define MAX_SCRIPT_LEN 20
+#define SCRIPT_LINE_LEN 80
 
 // Simply-scripted cutscene action tokens.
-enum cutscene_action
-{
-	CS_DEFAULT,
-	CS_FRAME,
-	CS_MESSAGE,
-	CS_DELAY,
-	CS_END
-};
+#define CS_DEFAULT 0
+#define CS_FRAME 1
+#define CS_MESSAGE 2
+#define CS_DELAY 3
+#define CS_END 4
+
+// Pull external "level" value from main.cpp (shared with game)
+extern unsigned int level;
 
 char do_gs_cutscene()
 {
 	char buffer[64];
 
 	// cutscene script
-	enum cutscene_action script_action[40];
-	char script_param[40][80];
+	unsigned char script_action[MAX_SCRIPT_LEN];
+	char script_param[MAX_SCRIPT_LEN][SCRIPT_LINE_LEN];
 
 	// Cutscene screen init section.
 	//  First up, load the cutscene script.
@@ -39,7 +37,7 @@ char do_gs_cutscene()
 	FILE *fp = fopen(buffer,"r");
 	if (fp == NULL) { return gs_title; }
 	int i = 0;
-	while (!feof(fp) && i < 40)
+	while (!feof(fp) && i < MAX_SCRIPT_LEN)
 	{
 		// read first char
 		int c = fgetc(fp);
@@ -64,7 +62,7 @@ char do_gs_cutscene()
 
 		// everything afterwards is "script parameter"
 		
-		if (fgets(script_param[i],79,fp) != 0) {
+		if (fgets(script_param[i],SCRIPT_LINE_LEN-1,fp) != 0) {
 			script_param[i][strlen(script_param[i])-1] = '\0';
 		}
 		i++;
@@ -75,7 +73,10 @@ char do_gs_cutscene()
 	//  Film border
 	GLuint tex_film[2];
 	tex_film[0] = load_texture("cutscene/frame-l.png",GL_LINEAR,GL_LINEAR);
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT ) ;
+
 	tex_film[1] = load_texture("cutscene/frame-r.png",GL_LINEAR,GL_LINEAR);
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT ) ;
 
 	// Cutscene frame textures.
 	GLuint tex_frame[NUM_FRAMES];
@@ -132,8 +133,8 @@ char do_gs_cutscene()
 
 	// GL setup for this screen
 	// no blending, yes texturing
-	glDisable(GL_BLEND);
-	glEnable(GL_TEXTURE_2D);
+	//glDisable(GL_BLEND);
+	//glEnable(GL_TEXTURE_2D);
 
 	// get ready to begin the cutscene loop...
 	unsigned int curframe = 0;
@@ -217,14 +218,14 @@ char do_gs_cutscene()
 			{
 				case SDL_KEYUP:
 					if (event.key.keysym.sym == SDLK_ESCAPE) {
-						if (level > 3)
+						if (level > MAX_LEVEL)
 							retval=gs_title;
 						else
 							retval=gs_game;
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
-					if (level > 3)
+					if (level > MAX_LEVEL)
 						retval=gs_title;
 					else
 						retval=gs_game;
@@ -248,6 +249,7 @@ char do_gs_cutscene()
 	// Clean up OpenGL stuff for this screen
 	glDeleteLists(list_frame, 1);
 	glDeleteLists(list_film, 1);
+
 	glDeleteTextures( NUM_FRAMES, tex_frame );
 	glDeleteTextures( 2, tex_film );
 

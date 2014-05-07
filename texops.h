@@ -6,6 +6,10 @@
 #include <SDL/SDL_opengl.h>
 #include <SDL/SDL_mixer.h>
 
+GLvoid glPrint(GLshort x, GLshort y, const char *text);
+void glFontInit();
+void glFontQuit();
+
 void glBox(int x, int y, int w, int h);
 
 // int powerOfTwo( int  );
