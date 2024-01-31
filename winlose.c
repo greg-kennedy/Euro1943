@@ -2,7 +2,7 @@
 #include "winlose.h"
 
 // Texture operations, and music_play
-#include "texops.h"
+#include "function.h"
 
 // Externs used by this sub-section
 extern unsigned char vol_music;

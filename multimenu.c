@@ -2,7 +2,7 @@
 #include "multimenu.h"
 
 // Texture operations
-#include "texops.h"
+#include "function.h"
 // used by Overserver
 #include "osc.h"
 

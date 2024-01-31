@@ -1,9 +1,9 @@
-#include "texops.h"
+#include "function.h"
 
 #include <SDL/SDL.h>
 #include <SDL/SDL_image.h>
 
-extern char vol_music;
+extern unsigned char vol_music;
 
 /**
  * Returns the first power of 2 greater or equal to the specified value.
@@ -172,12 +172,14 @@ void glBox (int x, int y, int w, int h)
 	glVertex2i(x, y+h);
 }
 
+// Loads a texture
 GLuint load_texture(const char *fname, GLuint min_filt, GLuint max_filt)
 {
 	int w,h;
 	return load_texture_extra(fname,min_filt,max_filt,&w,&h);
 }
 
+// Loads a texture, but returns the texture size in orig_w / orig_h
 GLuint load_texture_extra(const char *fname, GLuint min_filt, GLuint max_filt, int *orig_w, int *orig_h)
 {
 	int w,h;

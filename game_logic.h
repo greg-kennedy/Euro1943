@@ -6,18 +6,23 @@
 #include "common.h"
 
 // Start up, tick, and shutdown game engine
-void init_game();
+void init_game(const char * map, int ai_players, int ai_hq);
 void update_game();
 void shutdown_game();
 
 // Sets a script to playback over chat
 void set_script(const char *);
 
+// Connect or disconnect players
+int connect_player();
+void disconnect_player(int);
+
 // Supply user controls to an ID
-void control_game_regular(int, unsigned char controls[]);
-void control_game_hq(int, unsigned char controls[]);
+void control_game_regular(int id, int speed, int turn, int fire_primary, int fire_secondary,
+						  int weaponswap, int enter, float aim);
+void control_game_hq(int slot, int x, int y, int type, int fire, int enter);
 
 // Serialise game status, customized to a player
-unsigned char *serialize_game(int);
+int serialize_game(int, unsigned char *);
 
 #endif

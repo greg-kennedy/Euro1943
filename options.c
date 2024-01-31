@@ -2,7 +2,7 @@
 #include "options.h"
 
 // Texture operations + music
-#include "texops.h"
+#include "function.h"
 
 // Externs used by this sub-section
 extern unsigned char vol_music, vol_sfx;

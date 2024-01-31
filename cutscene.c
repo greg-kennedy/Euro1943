@@ -4,7 +4,7 @@
 // messagebox (speech bubble) used on this screen
 #include "message.h"
 // texture operations, also music_play
-#include "texops.h"
+#include "function.h"
 
 // how many frames make up a cutscene
 #define NUM_FRAMES 3
@@ -21,7 +21,7 @@
 #define CS_END 4
 
 // Pull external "level" value from main.cpp (shared with game)
-extern unsigned int level;
+extern int level;
 
 char do_gs_cutscene()
 {

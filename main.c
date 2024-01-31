@@ -1,5 +1,5 @@
 /* EURO1943 - GREG KENNEDY
-	http://greg-kennedy.com */
+	https://greg-kennedy.com */
 
 /* main.cpp - game flow goes here! */
 
@@ -7,10 +7,10 @@
 #include "common_client.h"
 
 // config-file parser
-#include "cfg_parse/cfg_parse.h"
+#include "cfg_parse.h"
 
 // texture operations
-#include "texops.h"
+#include "function.h"
 // message-box (speech bubble)
 #include "message.h"
 
@@ -61,7 +61,7 @@ static GLuint tex_cursor;
 static struct cfg_struct *cfg_setup()
 {
 	// defaults for numeric-types need an sprintf
-	char cfg_val[32];
+	char cfg_val[12] = "";
 
 	// Initialize config struct
 	struct cfg_struct *cfg = cfg_init();
@@ -72,23 +72,22 @@ static struct cfg_struct *cfg_setup()
 	cfg_set(cfg,"VIDEO_DEPTH","16");
 	cfg_set(cfg,"VIDEO_FULLSCREEN","1");
 
-	snprintf(cfg_val,32,"%d",MIX_MAX_VOLUME);
+	sprintf(cfg_val,"%d",MIX_MAX_VOLUME);
 	cfg_set(cfg,"AUDIO_VOLUME_MUSIC",cfg_val);
 	cfg_set(cfg,"AUDIO_VOLUME_SFX",cfg_val);
-	snprintf(cfg_val,32,"%d",MIX_DEFAULT_FREQUENCY);
+	sprintf(cfg_val,"%d",MIX_DEFAULT_FREQUENCY);
 	cfg_set(cfg,"AUDIO_FREQUENCY",cfg_val);
-	snprintf(cfg_val,32,"%d",MIX_DEFAULT_FORMAT);
+	sprintf(cfg_val,"%d",MIX_DEFAULT_FORMAT);
 	cfg_set(cfg,"AUDIO_FORMAT",cfg_val);
-	snprintf(cfg_val,32,"%d",MIX_DEFAULT_CHANNELS);
+	sprintf(cfg_val,"%d",MIX_DEFAULT_CHANNELS);
 	cfg_set(cfg,"AUDIO_OUTPUT_CHANNELS",cfg_val);
-	snprintf(cfg_val,32,"%d",MIX_DEFAULT_CHUNKSIZE);
+	sprintf(cfg_val,"%d",MIX_DEFAULT_CHUNKSIZE);
 	cfg_set(cfg,"AUDIO_CHUNKSIZE",cfg_val);
-	snprintf(cfg_val,32,"%d",MIX_CHANNELS);
+	sprintf(cfg_val,"%d",MIX_CHANNELS);
 	cfg_set(cfg,"AUDIO_MIXER_CHANNELS",cfg_val);
-	cfg_set(cfg,"AUDIO_LOW_QUALITY","0");
 
 	// overserver port
-	snprintf(cfg_val,32,"%d",DEFAULT_OS_PORT);
+	sprintf(cfg_val,"%d",DEFAULT_OS_PORT);
 	cfg_set(cfg,"OVERSERVER_PORT",cfg_val);
 	cfg_set(cfg,"OVERSERVER_HOST",DEFAULT_OS_HOST);
 
@@ -110,9 +109,9 @@ static int core_init(struct cfg_struct *cfg)
 	atexit(SDL_Quit);
 
 	// Initialize SDL_Image
-	// load support for the JPG and PNG image formats
-	//  Both are required for the game to work: return failure if we can't open these at all.
-	if(IMG_Init(IMG_INIT_JPG|IMG_INIT_PNG) != (IMG_INIT_JPG|IMG_INIT_PNG)) {
+	// load support for the PNG image formats - required for the game to work
+	//  return failure if we can't open these at all.
+	if(IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) {
 		fprintf(stderr,"IMG_Init: Failed to init required jpg and png support!\n");
 		fprintf(stderr,"IMG_Init: %s\n", IMG_GetError());
 		SDL_Quit();
@@ -151,7 +150,7 @@ static int core_init(struct cfg_struct *cfg)
 	SDL_EventState(SDL_JOYBUTTONDOWN, SDL_IGNORE);
 	SDL_EventState(SDL_JOYBUTTONUP, SDL_IGNORE);
 	SDL_EventState(SDL_VIDEORESIZE, SDL_IGNORE);
-	SDL_EventState(SDL_SYSWMEVENT, SDL_IGNORE);
+	//SDL_EventState(SDL_SYSWMEVENT, SDL_IGNORE);
 	SDL_EventState(SDL_USEREVENT, SDL_IGNORE);
 
 	return EXIT_SUCCESS;
@@ -179,7 +178,7 @@ static int video_init(struct cfg_struct *cfg)
 		SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);	  //Use at least 5 bits of Blue
 	} else if (bpp < 17)
 	{
-		// 16-bit: 555
+		// 16-bit: 565
 		SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);	  //Use at least 5 bits of Red
 		SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 6);	  //Use at least 5 bits of Green
 		SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);	  //Use at least 5 bits of Blue
@@ -273,13 +272,6 @@ static void audio_init(struct cfg_struct *cfg)
 	int output_channels = atoi(cfg_get(cfg,"AUDIO_OUTPUT_CHANNELS"));
 	int chunksize = atoi(cfg_get(cfg,"AUDIO_CHUNKSIZE"));
 
-	if (atoi(cfg_get(cfg,"AUDIO_LOW_QUALITY")))
-	{
-		char env_setting[64];
-		sprintf(env_setting,"%s=1",MIX_EFFECTSMAXSPEED);
-		putenv(env_setting);
-	}
-
 	int mixer_channels = atoi(cfg_get(cfg,"AUDIO_MIXER_CHANNELS"));
 
 	if(Mix_OpenAudio(frequency, format, output_channels, chunksize))
@@ -313,7 +305,7 @@ static void audio_init(struct cfg_struct *cfg)
 			case AUDIO_U16MSB: format_str="U16MSB"; break;
 			case AUDIO_S16MSB: format_str="S16MSB"; break;
 		}
-		printf("Audio opened=%d times  frequency=%dHz  format=%s  channels=%d mixer_channels=%d",
+		printf("Audio opened=%d times  frequency=%dHz  format=%s  channels=%d mixer_channels=%d\n",
 			numtimesopened, frequency, format_str, output_channels,mixer_channels);
 	}
 }
@@ -390,7 +382,7 @@ int main(int argc, char *argv[])
 	// boilerplate startup message
 	printf("Euro1943 - v%s\nGreg Kennedy 2013\n\n", VERSION);
 
-	srand(time(NULL));
+	srand((unsigned int)time(NULL));
 
 	// .ini file configuration
 	// Pointer to a cfg_struct structure

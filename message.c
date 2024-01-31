@@ -2,7 +2,7 @@
 #include "message.h"
 
 // Texture operations and fonts
-#include "texops.h"
+#include "function.h"
 
 // Static, global values
 #define NUM_SPEAKERS 3

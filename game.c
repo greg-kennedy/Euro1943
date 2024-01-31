@@ -5,9 +5,10 @@
 // messagebox (speech bubble) used on this screen
 #include "message.h"
 
-#include "texops.h"
+#include "function.h"
 
 // standard math functions
+#define _USE_MATH_DEFINES
 #include <math.h>
 
 // other SDL includes
@@ -16,37 +17,114 @@
 
 // game logics
 #include "game_logic.h"
+#include "data.h"
 
 /* Loadable objects */
-#define NUM_OBJECTS 30
+#define NUM_HUMANS 9
+#define NUM_VEHICLES 14
 #define NUM_BLDGS 12
-#define NUM_HUMANS 18
 #define NUM_TILES 16
-#define NUM_BULLETS 17
-#define NUM_PARTICLES 4
+#define NUM_BULLETS 16
+#define NUM_PARTICLES 2
 #define NUM_SFX 31
 
-// Object definitions, as linked list.
-//  Objects can have zero or more "child" objects, which means drawing one is
-//  recursively calling pushMatrix and translating.
-struct object
+// Object definitions, as linked lists.
+static struct human
 {
+	// received from server
 	unsigned short id;
-	unsigned char team, angle, sprite;
-	short x, y;
+
+	unsigned char team;
+
+	unsigned char weapon;
 	char speed;
 
-// Specific to OBJ_HUMAN
-	//unsigned char weapon, torso_angle;
-// Specific to OBJ_PARTICLE and OBJ_PROJECTILE
-	float life;
-// Specific to OBJ_PARTICLE
-	float r,g,b;
-// Specific to OBJ_VEHICLE and OBJ_HUMAN
-	struct object *child;
+	unsigned short x, y;
+	float angle, aim;
 
-	struct object *next;
-} *objects[4];
+	// calculated locally
+	float dx, dy;
+	unsigned char legs;
+
+	struct human * next;
+} *human_list = NULL;
+
+// Vehicles etc, these come in multiple parts
+struct vehicle_child
+{
+	float angle; // 16384 step
+
+	unsigned char occupied;
+
+	const struct object_child * o;
+
+	// links to other items
+	struct vehicle_child * parent;
+	struct vehicle_child * child;
+	struct vehicle_child * next;
+};
+
+static struct vehicle
+{
+	unsigned short id;
+
+	unsigned char type, team;
+
+	unsigned short x, y;
+	char speed; // -64 to +63
+	float angle;	// 512 step
+
+	unsigned char occupied;
+
+	// calculated locally
+	float dx, dy;
+
+	const struct object_base * o;
+
+	struct vehicle_child * child;
+	struct vehicle * next;
+} *vehicle_list = NULL;
+
+static struct projectile
+{
+	// received from server
+	unsigned short id;
+
+	unsigned char type;
+
+	unsigned short x, y;
+	float angle, life;
+
+	// calculated locally
+	float dx, dy;
+
+	struct projectile * next;
+} *projectile_list = NULL;
+
+static struct effect
+{
+	// received from server
+	unsigned char type;
+
+	unsigned short x, y;
+	float time;
+
+	struct effect * next;
+} *effect_list = NULL;
+
+static struct particle
+{
+	unsigned char type;
+	float r, g, b;
+
+	unsigned short x, y;
+	float angle, life, scale, speed;
+
+	// calculated locally
+	float dx, dy;
+
+	struct particle * next;
+} *particle_list = NULL;
 
 ////////////
 // got some externs here
@@ -59,6 +137,7 @@ extern GLuint list_cursor;
 extern int multiplayer;
 //  single-player important init elements
 extern int level;
+int slot;
 //  on the other hand, these are defined for the multiplayer
 extern char HOSTNAME[80];
 UDPsocket sd;
@@ -66,11 +145,13 @@ IPaddress srvadd;
 UDPpacket *p;
 
 // Global time counter
-unsigned long ticks;
+unsigned long ticks, last_update_tick;
 // Player status
 unsigned char status;
 // Player ID number
 unsigned int id;
+// Camera
+//unsigned short camX, camY;
 // Zoom window size
 unsigned int oldzoom, newzoom;
 // Is player chatting?  What do they say?
@@ -82,7 +163,8 @@ unsigned char iSeeAll;
 
 // Player controls buffer
 // 0=up, 1=down, 2=left, 3=right, 4=prim-fire, 5=second-fire, 6=weaponswap, 7=enter/exit
-unsigned char localcontrols[9];
+unsigned char localcontrols[8];
+float localaim;
 
 // OK !   Static items.  Key game components go here.
 // loads of sound effects.
@@ -97,15 +179,17 @@ GLuint tex_hud[ 4 ]; // Minimap and UI
 GLuint tex_digit[10];
 GLuint tex_hqmenu;
 GLuint tex_minimap;
+//GLuint fog;
 GLuint tex_dir;
 
-GLuint tex_object[ NUM_OBJECTS ];
-int obj_w[NUM_OBJECTS], obj_h[NUM_OBJECTS];
-GLuint tex_human[ NUM_HUMANS ];
+GLuint tex_human[2][ NUM_HUMANS ];
+int human_w[NUM_HUMANS], human_h[NUM_HUMANS];
+GLuint tex_vehicle[2][ NUM_VEHICLES ];
+int vehicle_w[NUM_VEHICLES], vehicle_h[NUM_VEHICLES];
 GLuint tex_bullet[ NUM_BULLETS ];
-int bullet_w[NUM_OBJECTS], bullet_h[NUM_OBJECTS];
+int bullet_w[NUM_BULLETS], bullet_h[NUM_BULLETS];
 GLuint tex_particle[ NUM_PARTICLES ];
-int particle_w[NUM_OBJECTS], particle_h[NUM_OBJECTS];
+int particle_w[NUM_PARTICLES], particle_h[NUM_PARTICLES];
 //GLuint clouds;
 
 // However those textures aren't usually used directly
@@ -116,13 +200,14 @@ GLuint list_cappoint; // capture point
 
 GLuint list_hqmenu; // HQ menu: HQ only
 GLuint list_minimap; // on-screen minimap: non-HQ only
+//GLuint list_fog; // Fog of War for HQ player
 GLuint list_hud; // HUD (ammo, health, cap-points)
 GLuint list_digit; // Numbers
 GLuint list_direction; // Triangle showing current direction
 
-GLuint list_human; // Four classes of mobile object
-GLuint list_object;
-GLuint list_object_shadow;
+GLuint list_human[2]; // one per team
+GLuint list_vehicle[2]; // one per team
+GLuint list_vehicle_shadow; // shadow should be same for both
 GLuint list_bullet;
 GLuint list_particle;
 
@@ -139,6 +224,11 @@ unsigned char map[MAP_X][MAP_Y];
 unsigned char trees[MAP_X][MAP_Y];
 unsigned char bldloc[15][3];
 
+// entity the player controls
+struct human * player_e;
+struct vehicle * player_v;
+char seat;
+
 #define min(a,b) (a < b ? a : b)
 #define max(a,b) (a > b ? a : b)
 
@@ -152,51 +242,39 @@ float lerp (int val_a, int val_b, float time_t)
 	}
 }
 
-/*float lerp (int val_a, int val_b, unsigned int time_a, unsigned int time_b, unsigned int time_t)
+// Create a display list for drawing a texture
+//  Binds a texture and draws a box.
+static void game_create_list(GLuint base, GLuint tex, int w, int h)
 {
-	if (time_t < time_a) return val_a;
-	else if (time_t > time_b) return val_b;
-	else
-	{
-		float increment = (float)(val_b - val_a) / (time_b - time_a);
-
-		return (increment * (time_b - time_t)) + val_a;
-	}
-}*/
-
-static void game_create_list(GLuint base, int i, GLuint *tex, int *a_w, int *a_h)
-{
-	int w,h;
-	if (a_w == NULL)
-	{
-		w = 32; h = 32;
-	} else {
-		w = a_w[i]; h = a_h[i];
-	}
-	glNewList(base+i, GL_COMPILE);
-	glBindTexture(GL_TEXTURE_2D, tex[i]); 
+	glNewList(base, GL_COMPILE);
+	glBindTexture(GL_TEXTURE_2D, tex);
 	glBegin(GL_QUADS);
 		glBox(-w / 2, -h / 2, w, h);
 	glEnd();
 	glEndList();
 }
 
-static void game_create_shadow_list(GLuint base, int i, GLuint *tex, int *w, int *h)
+// Create a display list for drawing an object shadow
+//  Same texture but all black, 50% opacity
+/*
+static void game_create_shadow_list(GLuint base, GLuint tex, int w, int h)
 {
-	glNewList(base+i, GL_COMPILE);
-	glBindTexture(GL_TEXTURE_2D, tex[i]); 
+	glNewList(base, GL_COMPILE);
+	glBindTexture(GL_TEXTURE_2D, tex); 
 	glDisable(GL_ALPHA_TEST);
 	glEnable(GL_BLEND);
 	glColor4f(0,0,0,0.5);
 	glBegin(GL_QUADS);
-		glBox(-w[i] / 2, -h[i] / 2, w[i], h[i]);
+		glBox(-w / 2, -h / 2, w, h);
 	glEnd();
 	glColor4f(1,1,1,1);
 	glDisable(GL_BLEND);
 	glEnable(GL_ALPHA_TEST);
 	glEndList();
 }
+*/
 
+// Load all game objects and set everything up
 static void game_load()
 {
 	unsigned int i;
@@ -209,13 +287,15 @@ static void game_load()
 	glGenTextures( 1, &tex_hqmenu );
 	glGenTextures( 4, tex_hud );
 	glGenTextures( 1, &tex_dir );
+//	glGenTextures( 1, &tex_fog );
 	glGenTextures( 1, &tex_minimap );	// minimap not actually generated until later.
 
-	glGenTextures( NUM_OBJECTS, tex_object );
-	glGenTextures( NUM_HUMANS, tex_human );
+	glGenTextures( NUM_HUMANS, tex_human[0] );
+	glGenTextures( NUM_HUMANS, tex_human[1] );
+	glGenTextures( NUM_VEHICLES, tex_vehicle[0] );
+	glGenTextures( NUM_VEHICLES, tex_vehicle[1] );
 	glGenTextures( NUM_BULLETS, tex_bullet );
 	glGenTextures( NUM_PARTICLES, tex_particle );
-
 
 	///////////////
 	// Also, Create display lists for all the items we will have.
@@ -269,7 +349,6 @@ static void game_load()
 			glBox(0,0,32,32);
 		glEnd();
 		glEndList();
-
 	}
 
 	// HUD elements
@@ -307,43 +386,53 @@ static void game_load()
 	// Don't yet have a minimap texture, but we can make a DL to show it.
 	list_minimap = glGenLists(1);
 
+	// humans
+	for (int j = 0; j < 2; j ++) {
+		list_human[j] = glGenLists(NUM_HUMANS);
+		for (int i = 0; i < NUM_HUMANS; i++)
+		{
+			sprintf(buffer,"img/humgfx/%d/%d.png",j,i);
+			int w, h;
+			tex_human[j][i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST,&w, &h);
+			game_create_list(list_human[j] + i, tex_human[j][i], w, h);
+		}
+	}
+
 	// for the particles.
 	list_particle = glGenLists(NUM_PARTICLES);
 	for (i=0; i<NUM_PARTICLES; i++)
 	{
 		sprintf(buffer,"img/particle/%d.png",i);
-		tex_particle[i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST,&particle_h[i],&particle_w[i]);
+		int w, h;
+		tex_particle[i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST,&w,&h);
 
-		game_create_list(list_particle,i,tex_particle,particle_w,particle_h);
+		game_create_list(list_particle + i,tex_particle[i], w, h);
 	}
 
 	list_bullet = glGenLists(NUM_BULLETS);
 	for (i=0; i<NUM_BULLETS; i++)
 	{
 		sprintf(buffer,"img/bul/%d.png",i);
-		tex_bullet[i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST, &bullet_w[i],&bullet_h[i]);
+		int w, h;
+		tex_bullet[i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST, &w, &h);
 
-		game_create_list(list_bullet,i,tex_bullet,bullet_w,bullet_h);
+		game_create_list(list_bullet+i,tex_bullet[i],w, h);
 	}
 
-	list_object = glGenLists(NUM_OBJECTS);
-	list_object_shadow = glGenLists(NUM_OBJECTS);
-	for (i=0; i<NUM_OBJECTS; i++)
+	list_vehicle[0] = glGenLists(NUM_VEHICLES);
+	list_vehicle[1] = glGenLists(NUM_VEHICLES);
+//	list_vehicle_shadow = glGenLists(NUM_VEHICLES);
+	for (i=0; i<NUM_VEHICLES; i++)
 	{
-		sprintf(buffer,"img/gfx/%d.png",i);
-		tex_object[i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST,&obj_w[i],&obj_h[i]);
+		int w, h;
+		sprintf(buffer,"img/gfx/0/%d.png",i);
+		tex_vehicle[0][i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST,&w, &h);
+		game_create_list(list_vehicle[0] + i,tex_vehicle[0][i] , w, h);
+//		game_create_shadow_list(list_vehicle_shadow + i,tex_vehicle[0][i],w, h);
 
-		game_create_list(list_object,i,tex_object,obj_w,obj_h);
-		game_create_shadow_list(list_object_shadow,i,tex_object,obj_w,obj_h);
-	}
-
-	list_human = glGenLists(NUM_HUMANS);
-	for (i=0; i<NUM_HUMANS; i++)
-	{
-		sprintf(buffer,"img/humgfx/%d.png",i);
-		tex_human[i] = load_texture(buffer,GL_NEAREST,GL_NEAREST);
-
-		game_create_list(list_human,i,tex_human,NULL,NULL);
+		sprintf(buffer,"img/gfx/1/%d.png",i);
+		tex_vehicle[1][i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST,&w, &h);
+		game_create_list(list_vehicle[1] + i,tex_vehicle[1][i] , w, h);
 	}
 
 /////
@@ -359,13 +448,11 @@ static void game_load()
 //iSeeAll = 1;
 
 	frames = 0;
-	fpsticks = SDL_GetTicks();
-/*	camx = 400;
-	camy = 300;*/
+	fpsticks = ticks = SDL_GetTicks();
+//	camx = 400;
+//	camy = 300;
 	oldzoom = 0;
 	newzoom = 0;
-
-	ticks=SDL_GetTicks();
 
 //	for (i=0; i<9; i++)
 //		localcontrols[i]=0;
@@ -373,50 +460,95 @@ static void game_load()
 	message_clear();
 }
 
-/*static void create_particle(int x, int y, unsigned char angle, unsigned int speed, unsigned char life, int r, int g, int b)
-{
-	object *np;
-	np = (particle *) malloc (sizeof (struct particle));
-	np->x=x;
-	np->y=y;
-	np->angle=angle;
-	np->speed=speed;
-	np->type=type;
-	np->life=life;
-	np->next=toppart;
-	toppart=np;
-}*/
-
 // Draws an object on screen.
-static void draw_object(struct object *obj)
+static void draw_human(struct human *h, float rate)
 {
 	glPushMatrix();
-	glTranslatef(obj->x,obj->y,0);
-	glRotatef(obj->angle,0,0,1);
-	glColor4f(obj->r,obj->g,obj->b,min(obj->life,1));
-	glCallList(list_object + obj->sprite);
+	//printf("x = %f, rate = %f, speed = %d, cos-ang = %f, result = %f\n", h->x, rate, h->speed, cos(h->angle), h->x + (rate * h->speed * cos(h->angle)));
+	glTranslatef(h->x + rate * h->dx,h->y + rate * h->dy, 0);
+	glRotatef((180.0 / M_PI) * h->angle ,0,0,1);
+	glCallList(list_human[h->team] + h->legs);
 
-	struct object *child = obj->child;
-	while (child != NULL)
-	{
-		draw_object(child);
-		child = child->next;
-	}
+	glPushMatrix();
+	glRotatef((180.0 / M_PI) * h->aim,0,0,1);
+	glCallList(list_human[h->team] + h->weapon + 2);
+	glPopMatrix();
+
+	glPopMatrix();
+}
+
+// Draws an object on screen.
+static void draw_vehicle_child(int team, struct vehicle_child *c)
+{
+	do {
+		glPushMatrix();
+		glTranslatef(c->o->offset_x, c->o->offset_y, 0);
+		glRotatef((180.0 / M_PI) * c->angle,0,0,1);
+		glTranslatef(c->o->center_x, c->o->center_y, 0);
+
+		if (c->occupied && (c->o->flags & SEAT_IMG))
+			glCallList(list_human[team] + 2);
+		else if (c->o->sprite != -1)
+			glCallList(list_vehicle[team] + c->o->sprite);
+
+		if (c->child)
+			draw_vehicle_child(team, c->child);
+
+		glPopMatrix();
+
+		c = c->next;
+	} while(c != NULL);
+}
+
+static void draw_vehicle(struct vehicle *v, float rate)
+{
+	glPushMatrix();
+
+	glTranslatef(v->x + rate * v->dx, v->y + rate * v->dy, 0);
+	glRotatef((180.0 / M_PI) * v->angle, 0,0,1);
+	if (v->o->sprite != -1)
+		glCallList(list_vehicle[v->team] + v->o->sprite);
+
+	if (v->child)
+		draw_vehicle_child(v->team, v->child);
+
+	glPopMatrix();
+}
+
+static void draw_projectile(struct projectile *j, float rate)
+{
+	glPushMatrix();
+	glTranslatef(j->x + rate * j->dx, j->y + rate * j->dy, 0);
+	glRotatef((180.0 / M_PI) * j->angle ,0,0,1);
+	glCallList(list_bullet + j->type);
+	glPopMatrix();
+}
+
+static void draw_particle(struct particle *t, float rate)
+{
+	glPushMatrix();
+	glTranslatef(t->x + rate * t->dx, t->y + rate * t->dy, 0);
+//	glRotatef((180.0 / M_PI) * t->angle ,0,0,1);
+	glScalef(t->scale, t->scale, 1.0);
+	glColor4f(t->r, t->g, t->b, t->life - rate);
+	glCallList(list_particle + t->type);
 	glPopMatrix();
 }
 
 // Draws a shadow under an object on screen.
-static void draw_shadow(struct object *obj)
+/*
+static void draw_shadow(struct entity *obj)
 {
 	int offset = max(30, obj->speed - 30);
 
 	glPushMatrix();
 	glTranslatef(obj->x+offset,obj->y+offset,0);
 	glRotatef(obj->angle,0,0,1);
-	glCallList(list_object_shadow + obj->sprite);
+	glCallList(list_vehicle_shadow + obj->sprite);
 
 	glPopMatrix();
 }
+*/
 
 static void draw_number(int num, int x, int y)
 {
@@ -717,7 +849,7 @@ static void draw_map()
 			if (any_tiles) glEnd();
 		}
 
-// Buildings
+		// Buildings
 		for (i = 3; i < 15; i ++)
 		{
 			unsigned char type = bldloc[i][0];
@@ -725,7 +857,7 @@ static void draw_map()
 			{
 				glBindTexture(GL_TEXTURE_2D, tex_bldg[type]);
 				glBegin(GL_QUADS);
-					glBox(32 * bldloc[i][1] - (bldg_w[type] / 2),32 * bldloc[i][2] - (bldg_h[type] / 2),bldg_w[type],bldg_h[type]);
+					glBox(32 * bldloc[i][1] - (bldg_w[type] / 2) + 16,32 * bldloc[i][2] - (bldg_h[type] / 2) + 16,bldg_w[type],bldg_h[type]);
 				glEnd();				
 			}
 		}
@@ -740,7 +872,7 @@ static void draw_map()
 		{
 		  glBindTexture(GL_TEXTURE_2D, tex_bldg[0]);
 		  glBegin(GL_QUADS);
-			glBox(32 * bldloc[i][1] - (bldg_w[0] / 2),32 * bldloc[i][2] - (bldg_h[0] / 2),bldg_w[0],bldg_h[0]);
+			glBox(32 * bldloc[i][1] - (bldg_w[0] / 2) + 16,32 * bldloc[i][2] - (bldg_h[0] / 2) + 16,bldg_w[0],bldg_h[0]);
 		  glEnd();
 		}
 		glEndList();
@@ -749,7 +881,7 @@ static void draw_map()
 		{
 		  glBindTexture(GL_TEXTURE_2D, tex_bldg[8]);
 		  glBegin(GL_QUADS);
-			glBox(32 * bldloc[i][1] - (bldg_w[0] / 2),32 * bldloc[i][2] - (bldg_h[0] / 2),bldg_w[0],bldg_h[0]);
+			glBox(32 * bldloc[i][1] - (bldg_w[0] / 2) + 16,32 * bldloc[i][2] - (bldg_h[0] / 2) + 16,bldg_w[0],bldg_h[0]);
 		  glEnd();
 		}
 		glEndList();
@@ -758,7 +890,7 @@ static void draw_map()
 		{
 		  glBindTexture(GL_TEXTURE_2D, tex_bldg[9]);
 		  glBegin(GL_QUADS);
-			glBox(32 * bldloc[i][1] - (bldg_w[0] / 2),32 * bldloc[i][2] - (bldg_h[0] / 2),bldg_w[0],bldg_h[0]);
+			glBox(32 * bldloc[i][1] - (bldg_w[0] / 2) + 16,32 * bldloc[i][2] - (bldg_h[0] / 2) + 16,bldg_w[0],bldg_h[0]);
 		  glEnd();
 		}
 		glEndList();
@@ -948,10 +1080,12 @@ static int game_connect()
 
 //		sprintf(map_name,"maps/sp/%d.map",level);
 
-		init_game(map_name);
+		init_game(map_name, 31, 1);
+		// in single player ID is always 0
+		slot = connect_player();
 	}
 
-	health=100; ammo=30;cash[0]=cash[1]=500;
+	health=100; ammo=0; cash[0]=cash[1] = CASH_START;
  
 	// Client load map.
 	return load_map(map_name);
@@ -1003,19 +1137,23 @@ static void game_quit()
 	glDeleteLists(list_digit,10);
 	glDeleteLists(list_direction,1);
 
-	glDeleteLists(list_human,NUM_HUMANS);
-	glDeleteLists(list_object,NUM_OBJECTS);
-	glDeleteLists(list_object_shadow,NUM_OBJECTS);
+	for (i = 0; i < 2; i ++) {
+		glDeleteLists(list_human[i],NUM_HUMANS);
+		glDeleteLists(list_vehicle[1],NUM_VEHICLES);
+	}
+//	glDeleteLists(list_vehicle_shadow,NUM_VEHICLES);
 	glDeleteLists(list_bullet,NUM_BULLETS);
 	glDeleteLists(list_particle,NUM_PARTICLES);
 
 	glDeleteTextures( 10, tex_digit );
 	glDeleteTextures( 4, tex_hud );
-	glDeleteTextures( NUM_OBJECTS, tex_object );
+	for (i = 0; i < 2; i ++) {
+		glDeleteTextures( NUM_HUMANS, tex_human[i] );
+		glDeleteTextures( NUM_VEHICLES, tex_vehicle[1] );
+	}
 	glDeleteTextures( NUM_BULLETS, tex_bullet );
 	glDeleteTextures( NUM_BLDGS, tex_bldg );
 	glDeleteTextures( NUM_TILES+4, tex_tile );
-	glDeleteTextures( NUM_HUMANS, tex_human );
 	glDeleteTextures( NUM_PARTICLES, tex_particle );
 	glDeleteTextures( 1, &tex_hqmenu );
 	glDeleteTextures( 1, &tex_minimap );
@@ -1035,49 +1173,58 @@ static void game_draw()
 {
 	int i;
 /*	int j, drawTrail=0; */
-	int startx, starty, endx, endy;
+//	int startx, starty, endx, endy;
 
-	struct object *obj;
+//	struct human *obj;
 
-	//	rate=((float)ticks-SDL_GetTicks())/ UPDATEFREQ;
+	float rate=(float)(SDL_GetTicks() - last_update_tick)/ UPDATE_FREQ;
+
+//	printf("rate = %f\n", rate);
 
 	// "rate" is lerp-point, between 0 and 1.
-	float rate=((float)ticks-SDL_GetTicks())/ ((smooth[0]+smooth[1]+smooth[2]+smooth[3]+smooth[4]) / 5);
+	//float rate=((float)ticks-SDL_GetTicks())/ ((smooth[0]+smooth[1]+smooth[2]+smooth[3]+smooth[4]) / 5);
 
 	// Set up the orthographic perspective.  Either fully zoomed out (in HQ or cheating), or
 	//  set by globalZoom parameter.
 //	glClear(GL_COLOR_BUFFER_BIT);// | GL_DEPTH_BUFFER_BIT);
-	if (status == 3 || iSeeAll)
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	if (status == 4 || iSeeAll)
 	{
-		startx = 0;
-		endx = 4267;
-		starty = 3200;
-		endy = 0;
+		glOrtho( 0, 3200 * 4 / 3, 3200, 0, -1.0, 1.0);
+		glMatrixMode(GL_MODELVIEW);
+		glClear(GL_COLOR_BUFFER_BIT);// | GL_DEPTH_BUFFER_BIT);
+
+		glLoadIdentity();
 	}
 	else
 	{
 		float globalzoom = lerp(oldzoom, newzoom, rate);
-		globalzoom = 100;
-		float gz4 = globalzoom * 4;
-		float gz3 = globalzoom * 3;
-		startx = (int)(SCREEN_X / 2 - gz4);
-		endx = (int)(SCREEN_X / 2 + gz4);
-		starty = (int)(SCREEN_Y / 2 - gz3);
-		endy = (int)(SCREEN_Y / 2 + gz3);
+		globalzoom = 1.0f;
+		float camW = SCREEN_X / 8 * 4 * globalzoom;
+		float camH = SCREEN_X / 8 * 3 * globalzoom;
 
-		glTranslatef(-1500,-1500,0);
+		glOrtho( -camW, camW, camH, -camH, -1.0, 1.0);
+
+		glMatrixMode(GL_MODELVIEW);
+		glClear(GL_COLOR_BUFFER_BIT);// | GL_DEPTH_BUFFER_BIT);
+
+		glLoadIdentity();
+
+//		glTranslatef(-1500,-1500,0);
+//		if (player_e) {
+//			glTranslatef(-player_e->x,-player_e->y,0);
+//		} else {
+		if (status == 2 && player_e != NULL) {
+			glTranslatef(-( player_e->x + rate * player_e->dx),
+				-(player_e->y + rate * player_e->dy),0);
+		} else if (status == 3 && player_v != NULL) {
+			glTranslatef(-( player_v->x + rate * player_v->dx),
+				-(player_v->y + rate * player_v->dy),0);
+		} else {
+			glTranslatef(-1600,-1600,0);
+		}
 	}
-
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glOrtho( startx, endx, starty, endy, -1.0, 1.0);
-
-	glMatrixMode(GL_MODELVIEW);
-	glClear(GL_COLOR_BUFFER_BIT);// | GL_DEPTH_BUFFER_BIT);
-
-//	glLoadIdentity();
-
-//	locatecamera(&camx,&camy);
 
 	// Draw landscapes.
 	glCallList(list_map);
@@ -1088,45 +1235,41 @@ static void game_draw()
 		glCallList(list_cappoint + (3*i) + owner[i]);
 	}
 
-	// Everythnig from here on uses alpha test or blend.
+	// Everything from here on uses alpha test or blend.
 	glEnable(GL_ALPHA_TEST);
 
-	// Projectiles
-	obj = objects[OBJ_PROJECTILE];
-	while (obj != NULL)
+	// All visible objects
+	struct human * h = human_list;
+	while (h != NULL)
 	{
-		draw_object(obj);
-		obj = obj->next;
-
-		/* 		if (drawTrail && (projptr->type == 1 || projptr->type == 13 || projptr->type == 15))
-			createparticle((int)(projptr->x -((float)projptr->speed*sintable[projptr->angle] * rate)),(int)(projptr->y-((float)projptr->speed*-costable[projptr->angle] * rate)),(projptr->angle + 118 + (rand() % 20))%256,rand()%20+1,rand()%3+1,rand()%4+1);
-			 */
+		draw_human(h, rate);
+		h = h->next;
 	}
 
-	// Humans
-	obj = objects[OBJ_HUMAN];
-	while (obj != NULL)
-	{
-		draw_object(obj);
-		obj = obj->next;
-	}
-	
 	// Ground-based vehicles
-	obj = objects[OBJ_VEHICLE];
-	while (obj != NULL)
+	struct vehicle * v = vehicle_list;
+	while (v != NULL)
 	{
-		if (obj->sprite < 15 || obj->speed <= 30)
+		if ( !(v->o->flags & PLANE)|| v->speed <= 30)
 		{
-			draw_shadow(obj);
-			draw_object(obj);
+//			draw_shadow(obj);
+			draw_vehicle(v, rate);
 		}
-		obj = obj->next;
+		v = v->next;
+	}
+
+	struct projectile * j = projectile_list;
+	while (j != NULL)
+	{
+		draw_projectile(j, rate);
+		j = j->next;
 	}
 
 	// Trees
 	glCallList(list_tree);
 
 	// Airborne objects (planes)
+	/*
 	obj = objects[OBJ_VEHICLE];
 	while (obj != NULL)
 	{
@@ -1136,17 +1279,19 @@ static void game_draw()
 		}
 		obj = obj->next;
 	}
+	*/
 
 	glDisable(GL_ALPHA_TEST);
 	glEnable(GL_BLEND);
+
 	// Particles
-	obj = objects[OBJ_PARTICLE];
-	while (obj != NULL)
-	{
-		draw_object(obj);
-		obj = obj->next;
+	struct particle * t = particle_list;
+	while (t != NULL) {
+		draw_particle(t, rate);
+		t = t->next;
 	}
 	glDisable(GL_BLEND);
+	glColor3f(1, 1, 1);
 
 	// Time to draw the UI.
 	//gotta go back to the old way to draw the cursor right size, and UI.
@@ -1157,7 +1302,7 @@ static void game_draw()
 	glLoadIdentity();
 
 	// if player is commander, draw hq menu
-	if (status == 3)
+	if (status == 4)
 		glCallList(list_hqmenu);
 
 	// Draw HUD
@@ -1170,7 +1315,7 @@ static void game_draw()
 	draw_number(health,40,80);
 
 	// Team cash
-	if (status == 3)
+	if (status == 4)
 	{
 		draw_number(cash[0],640,20);
 		draw_number(cash[1],640,80);
@@ -1251,7 +1396,7 @@ static void game_draw()
 	}
 }
 
-unsigned int rd_int32(unsigned char *p)
+static unsigned int rd_int32(unsigned char *p)
 {
 	return ( p[0] << 24 ) |
 			( p[1] << 16 ) |
@@ -1259,127 +1404,423 @@ unsigned int rd_int32(unsigned char *p)
 			p[3];
 }
 
-unsigned short rd_int16(unsigned char *p)
+static unsigned int rd_int24(unsigned char *p)
+{
+	return ( p[0] << 16 ) |
+			( p[1] << 8 ) |
+			p[2];
+}
+
+static unsigned short rd_int16(unsigned char *p)
 {
 	return 	( p[0] << 8 ) |
 			p[1];
 }
 
-static struct object *object_find(unsigned int id, struct object *start)
+static struct vehicle_child * create_child(const struct object_child * o, struct vehicle_child * parent)
 {
-	while (start != NULL && start->id != id)
-	{
-		start=start->next;
-	}
-	return start;
-}
+	struct vehicle_child * c = (struct vehicle_child *) malloc(sizeof(struct vehicle_child));
+	c->o = o;
 
-static struct object *make_object()
-{
-	struct object *c = malloc(sizeof(struct object));
-	c->next = NULL;
-	c->child = NULL;
+	c->angle = 0;
+
+	c->occupied = 0;
+	c->parent = parent;
+
+	if (o->child != NULL)
+		c->child = create_child(o->child, c);
+	else
+		c->child = NULL;
+
+	// TODO make this iterative?
+	if (o->next != NULL)
+		c->next = create_child(o->next, parent);
+	else
+		c->next = NULL;
+
 	return c;
 }
 
-static unsigned char *child_unserialize(struct object *obj, unsigned char obj_kids, unsigned char *payload)
+void free_child(struct vehicle_child * c)
 {
-	unsigned char obj_sub_kids, i;
-
-	// deal with empty list
-	if (obj->child == NULL)
+	while (c != NULL)
 	{
-		obj->child = make_object();
+		free_child(c->child);
+		struct vehicle_child * n = c->next;
+		free(c);
+		c = n;
 	}
-	struct object *c = obj->child;
+}
 
-	// Update the item.
-	for (i=0; i<obj_kids; i++)
-	{
-		c->x = rd_int16(payload); payload += 2;
-		c->y = rd_int16(payload); payload += 2;
-		c->angle = *payload; payload ++;
-		c->sprite = *payload; payload ++;
+static unsigned char *unserialize_child(unsigned char *payload, struct vehicle_child * v)
+{
+	do {
+		unsigned short occupant_angle = rd_int16(payload); payload += 2;
+		v->occupied = occupant_angle >> 15;
+		v->angle = (occupant_angle & 0x7FFF) * M_PI / 32768.0;
 
-		obj_sub_kids = *payload; payload ++;
+//		printf(" . child: occ=%u ang=%f\n", v->occupied, v->angle);
 
-		// subobj kids
-		payload = child_unserialize(obj->child, obj_sub_kids, payload);
+		if (v->child)
+			payload = unserialize_child(payload, v->child);
 
-		// deal with partial list
-		if (i < obj_kids - 1 && c->next == NULL)
-		{
-			c->next = make_object();
-		}
-		c = c->next;
-	}
+		v = v->next;
+	} while (v != NULL);
 
 	return payload;
 }
 
 static void unserialize(unsigned char *payload)
 {
-	int i, obj_count, obj_id, obj_type, obj_kids;
+	int i;
 	struct object *obj;
 
 	// Unserializes the server-response for "game update".
-	status = *payload; payload ++;
-
-	// Player ID and other local info
-	id = rd_int16(payload); payload += 2;
-	newzoom = *payload; payload ++;
-	health = *payload; payload ++;
-	ammo = *payload; payload ++;
-
+	//  Global info
 	// Unserialize capture-points owner
 	for (i = 0; i < 3; i ++) {
-		owner[i] = *payload; payload ++;
+		owner[i] = (*payload >> (i * 2)) & 0x3;
 	}
+	payload ++;
 
 	// Cash
 	for (i = 0; i < 2; i ++) {
 		cash[i] = rd_int16(payload); payload += 2;
 	}
 
-	// Object updates.
-	obj_count = *payload; payload ++;
-	for (i = 0; i < obj_count; i ++)
+	// Player status
+	status = *payload; payload ++;
+
+	// Player entity ID and other local info
+	id = rd_int16(payload); payload += 2;
+//	printf("My ID is %u\n", id);
+	health = *payload; payload ++;
+	if (status == 2)
+		ammo = *payload;
+	else
+		seat = *payload;
+
+	payload ++;
+
+	player_e = NULL;
+	player_v = NULL;
+
+	// Human updates.
 	{
-		unsigned char type_and_team = *payload; payload ++;
-		obj_type = type_and_team & 0x7F;
-		obj_id = rd_int16(payload); payload ++;
-	
-		// Search for object in the list.
-		obj = object_find(obj_id, objects[obj_type]);
-		if (obj == NULL)
+		//  A new entity list where we stash everything we already knew about or created
+		struct human * l = NULL;
+
+		unsigned char human_count = *payload; payload ++;
+		for (i = 0; i < human_count; i ++)
 		{
-			obj = make_object();
-			obj->next = objects[obj_type];
-			objects[obj_type] = obj;
-		}
-		
-		// Update the item.
-		obj->team = type_and_team >> 7;
-		obj->x = rd_int16(payload); payload += 2;
-		obj->y = rd_int16(payload); payload += 2;
-		obj->angle = *payload; payload ++;
-		obj->speed = *payload; payload ++;
-		switch(obj_type)
-		{
-		case OBJ_PROJECTILE:
-			obj->life = *payload; payload ++;
-			break;
-		case OBJ_VEHICLE:
-		case OBJ_HUMAN:
-			// Update child objects, if any (humans always have 1, for torso)
-			obj_kids = *payload; payload ++;
-			if (obj_kids > 0)
-			{
-				payload = child_unserialize(obj, obj_kids, payload);
+			unsigned short human_id = rd_int16(payload); payload += 2;
+
+			// Try to locate the object in the local listing.
+			struct human * prev = NULL;
+			struct human * h = human_list;
+			while (h != NULL) {
+				if (h->id == human_id) {
+					// matched!  splice object out of prev. entity list
+					if (prev)
+						prev->next = h->next;
+					else
+						human_list = h->next;
+
+					break;
+				}
+
+				// not matched, keep looking
+				prev = h;
+				h = h->next;
 			}
-			break;
+
+			if (h == NULL) {
+				// didn't find it, need to clone a fresh copy from the library
+				h = (struct human *)malloc(sizeof(struct human));
+				h->id = human_id;
+
+				h->legs = 0;
+			}
+
+			// unpack the payload and update the item
+			unsigned char team_weapon_speed = *payload; payload ++;
+
+			// first byte
+			h->team = team_weapon_speed >> 7;
+			h->weapon = (team_weapon_speed & 0x7F) >> 2;
+
+			if ((team_weapon_speed & 0x3) == 2) h->speed = 15;
+			else if ((team_weapon_speed & 0x3) == 1) h->speed = -15;
+			else h->speed = 0;
+
+			unsigned int xy = rd_int24(payload); payload += 3;
+			h->x = xy >> 12;
+			h->y = xy & 0xFFF;
+
+			unsigned short angle_aim = rd_int16(payload); payload += 2;
+			h->angle = (angle_aim >> 12) * M_PI / 8.0;
+			h->aim = (angle_aim & 0xFFF) * M_PI / 2048.0;
+
+//			printf("Parsed human: %u, team=%u, weap=%u, x=%u, y=%u\n", h->id, h->team, h->weapon, h->x, h->y);
+			// place object into New Entity List
+			h->next = l;
+			l = h;
+
+			// computations
+			// flip legs image if moving
+			if (h->speed) h->legs = !h->legs;
+			h->dx = h->speed * cos(h->angle);
+			h->dy = h->speed * sin(h->angle);
+
+			// cache the player entity here for camera centering etc
+			if (status == 2 && human_id == id)
+			{
+				player_e = h;
+//				camX = h->x;
+//				camY = h->y;
+			}
+		}
+
+		// delete old entity_list
+		while (human_list != NULL) {
+			struct human * h = human_list->next;
+			free(human_list);
+			human_list = h;
+		}
+
+		human_list = l;
+	}
+
+	// vehicle updates.
+	{
+		//  A new entity list where we stash everything we already knew about or created
+		struct vehicle * l = NULL;
+
+		unsigned char vehicle_count = *payload; payload ++;
+
+		for (i = 0; i < vehicle_count; i ++)
+		{
+			unsigned short vehicle_id = rd_int16(payload); payload += 2;
+			unsigned char team_occupied_type = *payload; payload ++;
+
+			// Try to locate the object in the local listing.
+			struct vehicle * prev = NULL;
+			struct vehicle * v = vehicle_list;
+			while (v != NULL) {
+				if (v->id == vehicle_id) {
+					// matched!  splice object out of prev. entity list
+					if (prev)
+						prev->next = v->next;
+					else
+						vehicle_list = v->next;
+
+					break;
+				}
+
+				// not matched, keep looking
+				prev = v;
+				v = v->next;
+			}
+
+			if (v == NULL) {
+				// didn't find it, need to clone a fresh copy from the library
+				v = (struct vehicle *)malloc(sizeof(struct vehicle));
+				v->id = vehicle_id;
+
+				v->type = team_occupied_type & 0x3F;
+				v->o = vehicle_detail[v->type];
+//printf("cloned a vehicle type %u\n", v->type);
+
+				if (v->o->child != NULL)
+					v->child = create_child(v->o->child, NULL);
+				else
+					v->child = NULL;
+			}
+
+			// unpack the payload and update the item
+			v->team = team_occupied_type >> 7;
+			v->occupied = team_occupied_type & 0x40;
+//			v->type = team_occupied_type & 0x3F;
+
+			// object x, y, angle, and speed
+			unsigned int xy = rd_int24(payload); payload += 3;
+			v->x = xy >> 12;
+			v->y = xy & 0xFFF;
+
+			// speed max is +-64 (7 bits)
+			// angle in 512 steps (9 bits)
+			unsigned short angle_speed = rd_int16(payload); payload += 2;
+			v->angle = (angle_speed >> 7) * M_PI / 256.0;
+			v->speed = ((short)angle_speed) & 0x7F;
+
+			//printf("Parsed vehicle: %u, team=%u, type=%u, occupied=%u, x=%u, y=%u, angle=%f, speed=%d\n", v->id, v->team, v->type, v->occupied, v->x, v->y, v->angle, v->speed);
+
+			// and now: the children
+			if (v->child)
+				payload = unserialize_child(payload, v->child);
+
+			// place object into New Entity List
+			v->next = l;
+			l = v;
+
+			// computations
+			v->dx = v->speed * cos(v->angle);
+			v->dy = v->speed * sin(v->angle);
+
+			// cache the player entity here for camera centering etc
+			if (status == 3 && vehicle_id == id)
+			{
+				player_v = v;
+//				camX = h->x;
+//				camY = h->y;
+			}
+		}
+
+		// delete old entity_list
+		while (vehicle_list != NULL) {
+			struct vehicle * v = vehicle_list->next;
+			free_child(vehicle_list->child);
+			free(vehicle_list);
+			vehicle_list = v;
+		}
+
+		vehicle_list = l;
+	}
+
+	// Projectile updates.
+	{
+		//  A new list
+		struct projectile * l = NULL;
+
+		unsigned char projectile_count = *payload; payload ++;
+		for (i = 0; i < projectile_count; i ++)
+		{
+			unsigned short projectile_id = rd_int16(payload); payload += 2;
+
+			// Try to locate the object in the local listing.
+			struct projectile * prev = NULL;
+			struct projectile * j = projectile_list;
+			while (j != NULL) {
+				if (j->id == projectile_id) {
+					// matched!  splice object out of prev. entity list
+					if (prev)
+						prev->next = j->next;
+					else
+						projectile_list = j->next;
+
+					break;
+				}
+
+				// not matched, keep looking
+				prev = j;
+				j = j->next;
+			}
+
+			if (j == NULL) {
+				// didn't find it, need to clone a fresh copy from the library
+				j = (struct projectile *)malloc(sizeof(struct projectile));
+				j->id = projectile_id;
+			}
+
+			// unpack the payload and update the item
+			unsigned int xy = rd_int24(payload); payload += 3;
+			j->x = xy >> 12;
+			j->y = xy & 0xFFF;
+
+			// 24 bits -
+			//  4 bits for Type
+			//  1 bit for Fractional Life
+			// 11 bits Angle (2048 steps)
+			//  8 bits Life
+			unsigned char type_float_angle = *payload; payload ++;
+			j->type = type_float_angle >> 4;
+			j->angle = (((type_float_angle & 0x07) << 8) | *payload) * (M_PI / 1024); payload ++;
+
+			if (type_float_angle & 0x08)
+				j->life = (*payload) / 256.0;
+			else
+				j->life = *payload;
+			payload ++;
+
+			printf("projectile %u: type=%u, xy=%u, %u, angle=%f, life=%f\n", j->id, j->type, j->x, j->y, j->angle, j->life);
+
+			// place object into New Entity List
+			j->next = l;
+			l = j;
+
+			// computations
+			j->dx = projectile_detail[j->type].speed * cos(j->angle);
+			j->dy = projectile_detail[j->type].speed * sin(j->angle);
+		}
+
+		// delete old entity_list
+		while (projectile_list != NULL) {
+			struct projectile * j = projectile_list->next;
+			free(projectile_list);
+			projectile_list = j;
+		}
+
+		projectile_list = l;
+	}
+
+	// effect updates
+	{
+		unsigned char effect_count = *payload; payload ++;
+		for (i = 0; i < effect_count; i ++)
+		{
+			// unpack the payload and update the item
+			unsigned int xy = rd_int24(payload); payload += 3;
+			unsigned short x = xy >> 12;
+			unsigned short y = xy & 0xFFF;
+
+			unsigned char type = *payload; payload ++;
+
+			float life = *payload / 256.0f;
+
+			effect * e = (struct effect *)malloc(sizeof(struct effect));
+			e->x = x;
+			e->y = y;
+			e->type = type;
+			e->time = life;
+
+			printf("effect: type=%u, xy=%u, %u, time=%f\n", e->type, e->x, e->y, e->time);
+
+			e->next = effect_list;
+			effect_list = e;
 		}
 	}
+
+	// /////////////
+	// particle updates?
+	{
+		struct particle * prev = NULL;
+		struct particle * t = particle_list;
+		while (t != NULL) {
+			t->life -= 1;
+			if (t->life < 0)
+			{
+				if (t == particle_list) {
+					particle_list = t->next;
+					free(t);
+					t = particle_list;
+				} else {
+					prev->next = t->next;
+					free(t);
+					t = prev->next;
+				}
+			} else {
+				t->x += t->dx; t->dx *= .5;
+				t->y += t->dy; t->dy *= .5;
+
+				prev = t;
+				t = t->next;
+			}
+		}
+	}
+
+//	if (player_e) {
+//		printf("Player %d, %d, at %f, %f / %f, %f\n", player_e->type, player_e->team, player_e->x, player_e->y, player_e->angle, player_e->speed);
+//	}
 }
 
 static char game_update()
@@ -1395,6 +1836,110 @@ static char game_update()
 
 	/* Periodic client-side activity here: things like particle trails, etc. */
 	ticks=SDL_GetTicks();
+
+	float rate=(float)(ticks - last_update_tick)/ UPDATE_FREQ;
+
+	struct projectile * j = projectile_list, * prev = NULL;
+	while (j != NULL)
+	{
+		if (j->life < rate) {
+//			printf(" - Expire projectile J as life %f < rate %f\n", j->life, rate);
+			// stop bullet here - splice it out of list
+			if (j == projectile_list) {
+				projectile_list = j->next;
+				free(j);
+				j = projectile_list;
+			}
+			else {
+				prev->next = j->next;
+				free(j);
+				j = prev->next;
+			}
+		} else {
+//			printf(" - Continue as J as life %f >= rate %f\n", j->life, rate);
+			if (projectile_detail[j->type].trail && (rand() % 3) == 0) {
+				/* make a particle */
+				struct particle * t = (struct particle *)malloc(sizeof(struct particle));
+				t->type = 0;
+				float rgb = (0.5f * (float)rand() / RAND_MAX) + 0.5f;
+				t->r = t->g = t->b = rgb;
+
+				float q = (float)rand() / RAND_MAX;
+				t->angle = j->angle + (3 * M_PI / 4) + (q * (M_PI / 2));
+				t->x = j->x + rate * j->dx;
+				t->y = j->y + rate * j->dy;
+
+				q = (float)rand() / RAND_MAX;
+				t->scale = q / 2;
+				t->speed = 10 * (1.5 - q);
+				t->life = 2 + rate + q;
+				t->dx = t->speed * cos(t->angle);
+				t->dy = t->speed * sin(t->angle);
+
+				t->next = particle_list;
+				particle_list = t;
+			}
+
+			prev = j;
+			j = j->next;
+		}
+	}
+
+	// special effects if it's time
+	{
+	struct effect * e = effect_list, * prev = NULL;
+	while (e != NULL)
+	{
+		if (e->time < rate) {
+			// it is time
+			if (e->type == 1) {
+				// explosion
+				for (int i = 0; i < 128; i ++) {
+					struct particle * t = (struct particle *)malloc(sizeof(struct particle));
+
+					t->type = 0;
+					if (i < 96) {
+						t->r = 1;
+						t->g = (float)rand() / RAND_MAX;
+						t->b = 0;
+					} else {
+						t->r = t->g = t->b = (float)rand() / RAND_MAX;
+					}
+
+					t->x = e->x;
+					t->y = e->y;
+
+					float q = (float)rand() / RAND_MAX;
+					t->angle = rand() / ((float)RAND_MAX / (M_PI * 2));
+//					printf(" . particle created at xy=%u, %u, angle=%f\n", t->x, t->y, t->angle);
+					t->scale = q;
+					t->speed = 48 * (1.1 - q);
+					t->life = 4 + q;
+					t->dx = t->speed * cos(t->angle);
+					t->dy = t->speed * sin(t->angle);
+//					printf(" . . dx=%f dy=%f (dist=%f)\n", t->dx, t->dy, (t->dx * t->dx) + (t->dy * t->dy));
+
+					t->next = particle_list;
+					particle_list = t;
+				}
+			}
+
+			// and delete the effect, it's triggered now
+			if (e == effect_list) {
+				effect_list = e->next;
+				free(e);
+				e = effect_list;
+			}
+			else {
+				prev->next = e->next;
+				free(e);
+				e = prev->next;
+			}
+		} else {
+			prev = e;
+			e = e->next;
+		}
+	}}
 
 	/* The next thing to do is to check for player inputs. */
 	SDL_Event event;
@@ -1412,8 +1957,10 @@ static char game_update()
 						localcontrols[2]=1;
 					else if (event.key.keysym.sym == SDLK_DOWN) // || event.key.keysym.sym == SDLK_S)
 						localcontrols[3]=1;
-					else if (event.key.keysym.sym == SDLK_RETURN)
+					else if (event.key.keysym.sym == SDLK_TAB)
 						localcontrols[6]=1;
+					else if (event.key.keysym.sym == SDLK_RETURN)
+						localcontrols[7]=1;
 				} else {
 					if (event.key.keysym.sym == SDLK_RETURN)
 					{
@@ -1461,8 +2008,10 @@ static char game_update()
 					localcontrols[2]=0;
 				else if (event.key.keysym.sym == SDLK_DOWN) // || event.key.keysym.sym == SDLK_S)
 					localcontrols[3]=0;
-/*				else if (event.key.keysym.sym == SDLK_RETURN)
-					localcontrols(6,0);*/
+				else if (event.key.keysym.sym == SDLK_TAB)
+					localcontrols[6] = 0;
+				else if (event.key.keysym.sym == SDLK_RETURN)
+					localcontrols[7] = 0;
 
 				else if (event.key.keysym.sym == SDLK_c)
 				{
@@ -1475,8 +2024,33 @@ static char game_update()
 			        SDL_EnableUNICODE( 1 );
 				}
 				break;
-/*			case SDL_MOUSEBUTTONDOWN:
-				if (status == 3) {
+			case SDL_MOUSEBUTTONDOWN:
+				mx=event.motion.x;
+				my=event.motion.y;
+				if (status == 2) {
+					// figure out my new facing.
+
+					// localaim is an absolute (heading)
+					localaim = atan2(my - 300.0f, mx - 400.0f);
+					if (localaim < 0) localaim += (2 * M_PI);
+
+					// convert this into a bearing, for display
+					float aim = localaim - player_e->angle;
+					// get the range back to -pi to +pi
+					if (aim < -M_PI) aim += M_PI * 2;
+					else if (aim > M_PI) aim -= M_PI * 2;
+
+					// cap range to -pi/2 to pi/2 for our controlled player
+					if (aim > M_PI/2) player_e->aim = M_PI/2;
+					else if (aim < -M_PI/2) player_e->aim = -M_PI/2;
+					else player_e->aim = aim;
+
+					if (event.button.button == SDL_BUTTON_LEFT)
+						localcontrols[4] = 1;
+					else if (event.button.button == SDL_BUTTON_RIGHT)
+						localcontrols[5] = 1;
+				}
+/*				if (status == 3) {
 					if (event.button.button == SDL_BUTTON_MIDDLE)
 						localcontrols(6,1);
 					else if (event.button.button == SDL_BUTTON_WHEELUP)
@@ -1516,17 +2090,56 @@ static char game_update()
 					else if (event.button.button == SDL_BUTTON_WHEELDOWN)
 						localcontrols(7,1);
 				}
+				*/
 				break;
 			case SDL_MOUSEBUTTONUP:
-				if (event.button.button == SDL_BUTTON_LEFT)
-						unshoot[0]=0;
-				else if (event.button.button == SDL_BUTTON_RIGHT)
-						unshoot[1]=0;
-				break;*/
+				mx=event.motion.x;
+				my=event.motion.y;
+				if (status == 2) {
+					// figure out my new facing.
+
+					// localaim is an absolute (heading)
+					localaim = atan2(my - 300.0f, mx - 400.0f);
+					if (localaim < 0) localaim += (2 * M_PI);
+
+					// convert this into a bearing, for display
+					float aim = localaim - player_e->angle;
+					// get the range back to -pi to +pi
+					if (aim < -M_PI) aim += M_PI * 2;
+					else if (aim > M_PI) aim -= M_PI * 2;
+
+					// cap range to -pi/2 to pi/2 for our controlled player
+					if (aim > M_PI/2) player_e->aim = M_PI/2;
+					else if (aim < -M_PI/2) player_e->aim = -M_PI/2;
+					else player_e->aim = aim;
+
+					if (event.button.button == SDL_BUTTON_LEFT)
+						localcontrols[4] = 0;
+					else if (event.button.button == SDL_BUTTON_RIGHT)
+						localcontrols[5] = 0;
+				}
+				break;
 			case SDL_MOUSEMOTION:
 				mx=event.motion.x;
 				my=event.motion.y;
-				// figure out my new facing.
+				if (status == 2) {
+					// figure out my new facing.
+
+					// localaim is an absolute (heading)
+					localaim = atan2(my - 300.0f, mx - 400.0f);
+					if (localaim < 0) localaim += (2 * M_PI);
+
+					// convert this into a bearing, for display
+					float aim = localaim - player_e->angle;
+					// get the range back to -pi to +pi
+					if (aim < -M_PI) aim += M_PI * 2;
+					else if (aim > M_PI) aim -= M_PI * 2;
+
+					// cap range to -pi/2 to pi/2 for our controlled player
+					if (aim > M_PI/2) player_e->aim = M_PI/2;
+					else if (aim < -M_PI/2) player_e->aim = -M_PI/2;
+					else player_e->aim = aim;
+				}
 /*				if (status == 3)
 				{
 					mxt = mx;
@@ -1558,7 +2171,7 @@ static char game_update()
 		{
 			next_control_tick = ticks + CONTROL_FREQ;
 
-			if (status != 3) {
+			if (status != 4) {
 				// A regular control update.
 				//  A two-byte packet: bitfields packed in byte 1, and byte 2 holds angle as char.
 				p->data[0] = 0;
@@ -1590,10 +2203,11 @@ static char game_update()
 					message_post(0, (char *)&payload);
 					break;
 				case 'M':	// Map change message
-					snprintf(buffer,49,"maps/%s",(char *)&payload);
+					sprintf(buffer,"maps/%s",(char *)&payload);
 					load_map(buffer);
 					break;
 				case 'U':	// Game update.
+					last_update_tick = ticks;
 					unserialize(payload);
 					break;
 				default:
@@ -1601,21 +2215,36 @@ static char game_update()
 			}
 		}
 	} else {
-		if (status == STATUS_HQ)
+		// we just control the local game directly
+		if (status == 4)
 		{
-			control_game_hq(id, localcontrols);
-		} else {
-			control_game_regular(id, localcontrols);
+			control_game_hq(slot,
+				mx / 6,
+				min(my / 6, 100),
+				0,
+				0,
+				localcontrols[7]);
+		} else if (status == 2 || status == 3) {
+			control_game_regular(slot,
+				localcontrols[2] ? 1 : (localcontrols[3] ? -1 : 0),
+				localcontrols[1] ? 1 : (localcontrols[0] ? -1 : 0),
+				localcontrols[4],
+				localcontrols[5],
+				localcontrols[6],
+				localcontrols[7],
+				localaim);
 		}
 
-		//control_game(0, controls);
-
-		if (next_server_tick >= ticks)
+		if (next_server_tick <= ticks)
 		{
+			last_update_tick = ticks;
 			next_server_tick = ticks + UPDATE_FREQ;
 			update_game();
 
-			unserialize(serialize_game(id));
+			// serialize the game state from the engine, then unpack it again
+			unsigned char payload[1500];
+			int payload_size = serialize_game(slot, payload);
+			unserialize(payload);
 		}
 	}
 

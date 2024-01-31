@@ -20,14 +20,6 @@
 #define MAP_X 100
 #define MAP_Y 100
 
-#define OBJ_HUMAN 0
-#define OBJ_VEHICLE 1
-#define OBJ_PROJECTILE 2
-#define OBJ_PARTICLE 3
-
-#define STATUS_DEAD 0
-#define STATUS_HUMAN 1
-#define STATUS_VEHICLE 2
-#define STATUS_HQ 3
+#define MAX_PLAYERS 32
 
 #endif
