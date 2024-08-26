@@ -2,14 +2,12 @@
 
 #include "game.h"
 
-// messagebox (speech bubble) used on this screen
-#include "message.h"
-
-#include "function.h"
-
 // standard math functions
 #define _USE_MATH_DEFINES
 #include <math.h>
+#ifndef M_TAU
+  #define M_TAU (M_PI * 2.0)
+#endif
 
 // other SDL includes
 #include <SDL/SDL.h>
@@ -20,8 +18,7 @@
 #include "data.h"
 
 /* Loadable objects */
-#define NUM_HUMANS 9
-#define NUM_VEHICLES 14
+#define NUM_UNITS 23
 #define NUM_BLDGS 12
 #define NUM_TILES 16
 #define NUM_BULLETS 16
@@ -29,61 +26,52 @@
 #define NUM_SFX 31
 
 // Object definitions, as linked lists.
-static struct human
-{
-	// received from server
-	unsigned short id;
 
-	unsigned char team;
+#define UNIT_OCCUPIED 0x80
+#define UNIT_FRAME 0x01
 
-	unsigned char weapon;
-	char speed;
+// game globals
+extern struct env_t env;
 
-	unsigned short x, y;
-	float angle, aim;
-
-	// calculated locally
-	float dx, dy;
-	unsigned char legs;
-
-	struct human * next;
-} *human_list = NULL;
-
-// Vehicles etc, these come in multiple parts
-struct vehicle_child
+// Units (humans, units etc), these come in multiple parts
+struct unit_sub
 {
 	float angle; // 16384 step
 
-	unsigned char occupied;
+	// show human in seat or no
+	unsigned char flags;
 
-	const struct object_child * o;
+	// pointer to definition (template) in object list
+	const struct object_sub * o;
 
 	// links to other items
-	struct vehicle_child * parent;
-	struct vehicle_child * child;
-	struct vehicle_child * next;
+//	struct unit_sub * parent;
+	struct unit_sub * sub;
+	struct unit_sub * next;
 };
 
-static struct vehicle
+static struct unit
 {
 	unsigned short id;
 
-	unsigned char type, team;
+	unsigned char team;
 
 	unsigned short x, y;
 	char speed; // -64 to +63
 	float angle;	// 512 step
 
-	unsigned char occupied;
+	// animation frame (0 or 1) and occupied
+	unsigned char flags;
 
 	// calculated locally
 	float dx, dy;
 
+	// pointer to definition (template) in object list
 	const struct object_base * o;
 
-	struct vehicle_child * child;
-	struct vehicle * next;
-} *vehicle_list = NULL;
+	struct unit_sub * sub;
+	struct unit * next;
+} *unit_list = NULL;
 
 static struct projectile
 {
@@ -101,6 +89,7 @@ static struct projectile
 	struct projectile * next;
 } *projectile_list = NULL;
 
+// special effect (splash, explosion, dust cloud, etc)
 static struct effect
 {
 	// received from server
@@ -117,7 +106,7 @@ static struct particle
 	unsigned char type;
 	float r, g, b;
 
-	unsigned short x, y;
+	float x, y;
 	float angle, life, scale, speed;
 
 	// calculated locally
@@ -126,20 +115,9 @@ static struct particle
 	struct particle * next;
 } *particle_list = NULL;
 
-////////////
-// got some externs here
-extern int vol_sfx;
-extern long mx, my;
-extern GLuint list_cursor;
-
-// state variables used at init-time to figure out where to connect to the brain
-//  multiplayer or singleplayer?
-extern int multiplayer;
 //  single-player important init elements
-extern int level;
 int slot;
-//  on the other hand, these are defined for the multiplayer
-extern char HOSTNAME[80];
+//  on the other hand, these are defined for the env.multiplayer
 UDPsocket sd;
 IPaddress srvadd;
 UDPpacket *p;
@@ -148,12 +126,18 @@ UDPpacket *p;
 unsigned long ticks, last_update_tick;
 // Player status
 unsigned char status;
+// Respawn counter
+unsigned char respawn_time;
 // Player ID number
 unsigned int id;
 // Camera
 //unsigned short camX, camY;
 // Zoom window size
 unsigned int oldzoom, newzoom;
+//
+int mx, my;
+// gotta have screen shake bro!
+float shake;
 // Is player chatting?  What do they say?
 unsigned char bChatting;
 char cMesg[50];
@@ -177,15 +161,13 @@ int bldg_w[ NUM_BLDGS ], bldg_h[ NUM_BLDGS ];
 
 GLuint tex_hud[ 4 ]; // Minimap and UI
 GLuint tex_digit[10];
-GLuint tex_hqmenu;
+GLuint tex_sidebar[ 2 ];
 GLuint tex_minimap;
-//GLuint fog;
+GLuint tex_fog;
 GLuint tex_dir;
 
-GLuint tex_human[2][ NUM_HUMANS ];
-int human_w[NUM_HUMANS], human_h[NUM_HUMANS];
-GLuint tex_vehicle[2][ NUM_VEHICLES ];
-int vehicle_w[NUM_VEHICLES], vehicle_h[NUM_VEHICLES];
+GLuint tex_unit[2][ NUM_UNITS ];
+int unit_w[NUM_UNITS], unit_h[NUM_UNITS];
 GLuint tex_bullet[ NUM_BULLETS ];
 int bullet_w[NUM_BULLETS], bullet_h[NUM_BULLETS];
 GLuint tex_particle[ NUM_PARTICLES ];
@@ -198,16 +180,15 @@ GLuint list_tree;  // trees
 GLuint list_map;   // landscape
 GLuint list_cappoint; // capture point
 
-GLuint list_hqmenu; // HQ menu: HQ only
+GLuint list_sidebar; // HQ menu and Redeploy Indicator
 GLuint list_minimap; // on-screen minimap: non-HQ only
-//GLuint list_fog; // Fog of War for HQ player
+GLuint list_fog; // Fog of War for HQ player
 GLuint list_hud; // HUD (ammo, health, cap-points)
 GLuint list_digit; // Numbers
 GLuint list_direction; // Triangle showing current direction
 
-GLuint list_human[2]; // one per team
-GLuint list_vehicle[2]; // one per team
-GLuint list_vehicle_shadow; // shadow should be same for both
+GLuint list_unit[2]; // one per team
+GLuint list_unit_shadow; // shadow should be same for both
 GLuint list_bullet;
 GLuint list_particle;
 
@@ -225,14 +206,16 @@ unsigned char trees[MAP_X][MAP_Y];
 unsigned char bldloc[15][3];
 
 // entity the player controls
-struct human * player_e;
-struct vehicle * player_v;
+struct unit * player;
 char seat;
 
 #define min(a,b) (a < b ? a : b)
 #define max(a,b) (a > b ? a : b)
 
-float lerp (int val_a, int val_b, float time_t)
+// "fast" float square
+static float sqr (float x) { return x * x ; }
+
+static float lerp (int val_a, int val_b, float time_t)
 {
 	if (time_t < 0) return val_a;
 	else if (time_t > 1) return val_b;
@@ -247,10 +230,7 @@ float lerp (int val_a, int val_b, float time_t)
 static void game_create_list(GLuint base, GLuint tex, int w, int h)
 {
 	glNewList(base, GL_COMPILE);
-	glBindTexture(GL_TEXTURE_2D, tex);
-	glBegin(GL_QUADS);
-		glBox(-w / 2, -h / 2, w, h);
-	glEnd();
+	glBox(tex, w, h);
 	glEndList();
 }
 
@@ -284,16 +264,14 @@ static void game_load()
 	glGenTextures( NUM_BLDGS, tex_bldg );
 
 	glGenTextures( 10, tex_digit );
-	glGenTextures( 1, &tex_hqmenu );
+	glGenTextures( 2, tex_sidebar );
 	glGenTextures( 4, tex_hud );
 	glGenTextures( 1, &tex_dir );
-//	glGenTextures( 1, &tex_fog );
+	glGenTextures( 1, &tex_fog );
 	glGenTextures( 1, &tex_minimap );	// minimap not actually generated until later.
 
-	glGenTextures( NUM_HUMANS, tex_human[0] );
-	glGenTextures( NUM_HUMANS, tex_human[1] );
-	glGenTextures( NUM_VEHICLES, tex_vehicle[0] );
-	glGenTextures( NUM_VEHICLES, tex_vehicle[1] );
+	glGenTextures( NUM_UNITS, tex_unit[0] );
+	glGenTextures( NUM_UNITS, tex_unit[1] );
 	glGenTextures( NUM_BULLETS, tex_bullet );
 	glGenTextures( NUM_PARTICLES, tex_particle );
 
@@ -306,6 +284,7 @@ static void game_load()
 	for (i=0; i<NUM_TILES+4; i++)
 	{
 		sprintf(buffer,"img/tiles/%d.png",i);
+//		tex_tile[i] = load_texture(buffer,GL_LINEAR,GL_NEAREST);
 		tex_tile[i] = load_texture(buffer,GL_NEAREST,GL_NEAREST);
 	}
 
@@ -316,26 +295,26 @@ static void game_load()
 	}
 
 	// Load textures for UI elements
-	tex_hqmenu = load_texture("img/hud/hqmenu.png",GL_LINEAR,GL_LINEAR);
-	list_hqmenu = glGenLists(1);
-	glNewList(list_hqmenu, GL_COMPILE); {
+	list_sidebar = glGenLists(2);
+	for (i=0; i < 2; i ++) {
+		sprintf(buffer,"img/hud/sidebar/%d.png",i);
+		tex_sidebar[i] = load_texture(buffer,GL_LINEAR,GL_LINEAR);
+		glNewList(list_sidebar + i, GL_COMPILE);
+
 		// No need for alpha test
 		glDisable(GL_ALPHA_TEST);
-		glBindTexture(GL_TEXTURE_2D, tex_hqmenu); 
-		glBegin(GL_QUADS);
-			glBox(SCREEN_X-200,0,200,SCREEN_Y);
+		glBox(tex_sidebar[i], 200, SCREEN_Y);
 		glEnd();
-	} glEndList();
+
+		glEndList();
+	}
 
 	tex_dir = load_texture("img/ui/dir.png",GL_NEAREST,GL_NEAREST);
 	// Which way does player face?
 	list_direction = glGenLists(1);
-	glNewList(list_minimap, GL_COMPILE); {
-		glBindTexture(GL_TEXTURE_2D, tex_dir);
-		glBegin(GL_QUADS);
-			glBox(0,0,8,8);
-		glEnd();
-	} glEndList();
+	glNewList(list_direction, GL_COMPILE);
+	glBox(tex_dir, 8, 8);
+	glEnd();
 
 	// for the numbers.
 	list_digit = glGenLists(10);
@@ -344,10 +323,7 @@ static void game_load()
 		sprintf(buffer,"img/ui/n%d.png",i);
 		tex_digit[i] = load_texture(buffer,GL_NEAREST,GL_NEAREST);
 		glNewList(list_digit+i, GL_COMPILE);
-		glBindTexture(GL_TEXTURE_2D, tex_digit[i]); 
-		glBegin(GL_QUADS);
-			glBox(0,0,32,32);
-		glEnd();
+		glBox(tex_digit[i], 32, 32); 
 		glEndList();
 	}
 
@@ -363,19 +339,19 @@ static void game_load()
 		glEnable(GL_ALPHA_TEST);
 		glBindTexture(GL_TEXTURE_2D, tex_hud[0]); 
 		glBegin(GL_QUADS);
-			glBox(0,0,32,32);
+//			glBox(0,0,32,32);
 		glEnd();
 		glBindTexture(GL_TEXTURE_2D, tex_hud[1]); 
 		glBegin(GL_QUADS);
-			glBox(80,0,32,32);
+//			glBox(80,0,32,32);
 		glEnd();
 		glBindTexture(GL_TEXTURE_2D, tex_hud[2]); 
 		glBegin(GL_QUADS);
-			glBox(0,40,32,32);
+//			glBox(0,40,32,32);
 		glEnd();
 		glBindTexture(GL_TEXTURE_2D, tex_hud[3]); 
 		glBegin(GL_QUADS);
-			glBox(0,80,32,32);
+//			glBox(0,80,32,32);
 		glEnd();
 	} glEndList();
 
@@ -386,17 +362,36 @@ static void game_load()
 	// Don't yet have a minimap texture, but we can make a DL to show it.
 	list_minimap = glGenLists(1);
 
-	// humans
-	for (int j = 0; j < 2; j ++) {
-		list_human[j] = glGenLists(NUM_HUMANS);
-		for (int i = 0; i < NUM_HUMANS; i++)
-		{
-			sprintf(buffer,"img/humgfx/%d/%d.png",j,i);
-			int w, h;
-			tex_human[j][i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST,&w, &h);
-			game_create_list(list_human[j] + i, tex_human[j][i], w, h);
-		}
-	}
+	// set up fog-of-war, which is all black,
+	//  but tex_fog will be selectively updated as things light up or dim
+	glBindTexture( GL_TEXTURE_2D, tex_fog);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	list_fog = glGenLists(1);
+	glNewList(list_fog, GL_COMPILE); {
+		// Disable simple Alpha test
+		glDisable(GL_ALPHA_TEST);
+		// enable blending for detailed transparency
+		glEnable(GL_BLEND);
+		// bind minimap texture
+		glBindTexture(GL_TEXTURE_2D, tex_fog);
+		glColor4f(0.0f,0.0f,0.0f, 0.75f);
+		// draw a quad at top-left.
+		glBegin(GL_QUADS);
+			glTexCoord2f(0,0);
+			glVertex2i(0, 0);
+			glTexCoord2f(0.78125,0);
+			glVertex2i(SCREEN_Y, 0);
+			glTexCoord2f(0.78125,0.78125);
+			glVertex2i(SCREEN_Y, SCREEN_Y);
+			glTexCoord2f(0,0.78125);
+			glVertex2i(0, SCREEN_Y);
+		glEnd();
+		glColor4f(1.0f,1.0f,1.0f,1.0f);
+		// Turn blending back off, we don't need it any more, probably.
+		glDisable(GL_BLEND);
+	} glEndList();
 
 	// for the particles.
 	list_particle = glGenLists(NUM_PARTICLES);
@@ -419,20 +414,21 @@ static void game_load()
 		game_create_list(list_bullet+i,tex_bullet[i],w, h);
 	}
 
-	list_vehicle[0] = glGenLists(NUM_VEHICLES);
-	list_vehicle[1] = glGenLists(NUM_VEHICLES);
-//	list_vehicle_shadow = glGenLists(NUM_VEHICLES);
-	for (i=0; i<NUM_VEHICLES; i++)
+	list_unit[0] = glGenLists(NUM_UNITS);
+	list_unit[1] = glGenLists(NUM_UNITS);
+//	list_unit_shadow = glGenLists(NUM_UNITS);
+	for (i=0; i<NUM_UNITS; i++)
 	{
 		int w, h;
 		sprintf(buffer,"img/gfx/0/%d.png",i);
-		tex_vehicle[0][i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST,&w, &h);
-		game_create_list(list_vehicle[0] + i,tex_vehicle[0][i] , w, h);
-//		game_create_shadow_list(list_vehicle_shadow + i,tex_vehicle[0][i],w, h);
+//		tex_unit[0][i] = load_texture_extra(buffer,GL_LINEAR,GL_LINEAR,&w, &h);
+		tex_unit[0][i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST,&w, &h);
+		game_create_list(list_unit[0] + i,tex_unit[0][i] , w, h);
+//		game_create_shadow_list(list_unit_shadow + i,tex_unit[0][i],w, h);
 
 		sprintf(buffer,"img/gfx/1/%d.png",i);
-		tex_vehicle[1][i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST,&w, &h);
-		game_create_list(list_vehicle[1] + i,tex_vehicle[1][i] , w, h);
+		tex_unit[1][i] = load_texture_extra(buffer,GL_NEAREST,GL_NEAREST,&w, &h);
+		game_create_list(list_unit[1] + i,tex_unit[1][i] , w, h);
 	}
 
 /////
@@ -453,6 +449,11 @@ static void game_load()
 //	camy = 300;
 	oldzoom = 0;
 	newzoom = 0;
+	bChatting = 0;
+	shake = 0;
+
+	// mouse state
+	SDL_GetMouseState(&mx, &my);
 
 //	for (i=0; i<9; i++)
 //		localcontrols[i]=0;
@@ -461,24 +462,7 @@ static void game_load()
 }
 
 // Draws an object on screen.
-static void draw_human(struct human *h, float rate)
-{
-	glPushMatrix();
-	//printf("x = %f, rate = %f, speed = %d, cos-ang = %f, result = %f\n", h->x, rate, h->speed, cos(h->angle), h->x + (rate * h->speed * cos(h->angle)));
-	glTranslatef(h->x + rate * h->dx,h->y + rate * h->dy, 0);
-	glRotatef((180.0 / M_PI) * h->angle ,0,0,1);
-	glCallList(list_human[h->team] + h->legs);
-
-	glPushMatrix();
-	glRotatef((180.0 / M_PI) * h->aim,0,0,1);
-	glCallList(list_human[h->team] + h->weapon + 2);
-	glPopMatrix();
-
-	glPopMatrix();
-}
-
-// Draws an object on screen.
-static void draw_vehicle_child(int team, struct vehicle_child *c)
+static void draw_unit_sub(int team, struct unit_sub *c)
 {
 	do {
 		glPushMatrix();
@@ -486,13 +470,13 @@ static void draw_vehicle_child(int team, struct vehicle_child *c)
 		glRotatef((180.0 / M_PI) * c->angle,0,0,1);
 		glTranslatef(c->o->center_x, c->o->center_y, 0);
 
-		if (c->occupied && (c->o->flags & SEAT_IMG))
-			glCallList(list_human[team] + 2);
+		if ((c->flags & UNIT_OCCUPIED) && (c->o->flags & SEAT_IMG))
+			glCallList(list_unit[team] + 2);
 		else if (c->o->sprite != -1)
-			glCallList(list_vehicle[team] + c->o->sprite);
+			glCallList(list_unit[team] + c->o->sprite);
 
-		if (c->child)
-			draw_vehicle_child(team, c->child);
+		if (c->sub)
+			draw_unit_sub(team, c->sub);
 
 		glPopMatrix();
 
@@ -500,17 +484,14 @@ static void draw_vehicle_child(int team, struct vehicle_child *c)
 	} while(c != NULL);
 }
 
-static void draw_vehicle(struct vehicle *v, float rate)
+static void draw_unit(struct unit *v, float rate)
 {
 	glPushMatrix();
 
 	glTranslatef(v->x + rate * v->dx, v->y + rate * v->dy, 0);
 	glRotatef((180.0 / M_PI) * v->angle, 0,0,1);
-	if (v->o->sprite != -1)
-		glCallList(list_vehicle[v->team] + v->o->sprite);
 
-	if (v->child)
-		draw_vehicle_child(v->team, v->child);
+	draw_unit_sub(v->team, v->sub);
 
 	glPopMatrix();
 }
@@ -544,7 +525,8 @@ static void draw_shadow(struct entity *obj)
 	glPushMatrix();
 	glTranslatef(obj->x+offset,obj->y+offset,0);
 	glRotatef(obj->angle,0,0,1);
-	glCallList(list_vehicle_shadow + obj->sprite);
+	glCallList(list_unit_shadow + obj->sprite);
+
 
 	glPopMatrix();
 }
@@ -579,6 +561,12 @@ static void drawgame_tile(int i, int j, int dir)
 	int y = 32 * j;
 	switch (dir)
 	{
+		case 0:
+			glTexCoord2f(0, 0); glVertex2i(x, y);
+			glTexCoord2f(1, 0); glVertex2i(x+32, y);
+			glTexCoord2f(1, 1); glVertex2i(x+32, y+32);
+			glTexCoord2f(0, 1); glVertex2i(x, y+32);
+			break;
 		case 1:
 			glTexCoord2f(1, 0); glVertex2i(x, y);
 			glTexCoord2f(1, 1); glVertex2i(x+32, y);
@@ -591,14 +579,11 @@ static void drawgame_tile(int i, int j, int dir)
 			glTexCoord2f(0, 0); glVertex2i(x+32, y+32);
 			glTexCoord2f(1, 0); glVertex2i(x, y+32);
 			break;
-		case 3:
+		default:
 			glTexCoord2f(0, 1); glVertex2i(x, y);
 			glTexCoord2f(0, 0); glVertex2i(x+32, y);
 			glTexCoord2f(1, 0); glVertex2i(x+32, y+32);
 			glTexCoord2f(1, 1); glVertex2i(x, y+32);
-			break;
-		default:
-			glBox(x,y,32,32);
 			break;
 	}
 }
@@ -853,11 +838,11 @@ static void draw_map()
 		for (i = 3; i < 15; i ++)
 		{
 			unsigned char type = bldloc[i][0];
-			if (type || i<4)
+			if (type) // || i<4)
 			{
 				glBindTexture(GL_TEXTURE_2D, tex_bldg[type]);
 				glBegin(GL_QUADS);
-					glBox(32 * bldloc[i][1] - (bldg_w[type] / 2) + 16,32 * bldloc[i][2] - (bldg_h[type] / 2) + 16,bldg_w[type],bldg_h[type]);
+//					glBox(32 * bldloc[i][1] - (bldg_w[type] / 2) + 16,32 * bldloc[i][2] - (bldg_h[type] / 2) + 16,bldg_w[type],bldg_h[type]);
 				glEnd();				
 			}
 		}
@@ -872,7 +857,7 @@ static void draw_map()
 		{
 		  glBindTexture(GL_TEXTURE_2D, tex_bldg[0]);
 		  glBegin(GL_QUADS);
-			glBox(32 * bldloc[i][1] - (bldg_w[0] / 2) + 16,32 * bldloc[i][2] - (bldg_h[0] / 2) + 16,bldg_w[0],bldg_h[0]);
+//			glBox(32 * bldloc[i][1] - (bldg_w[0] / 2) + 16,32 * bldloc[i][2] - (bldg_h[0] / 2) + 16,bldg_w[0],bldg_h[0]);
 		  glEnd();
 		}
 		glEndList();
@@ -881,7 +866,7 @@ static void draw_map()
 		{
 		  glBindTexture(GL_TEXTURE_2D, tex_bldg[8]);
 		  glBegin(GL_QUADS);
-			glBox(32 * bldloc[i][1] - (bldg_w[0] / 2) + 16,32 * bldloc[i][2] - (bldg_h[0] / 2) + 16,bldg_w[0],bldg_h[0]);
+//			glBox(32 * bldloc[i][1] - (bldg_w[0] / 2) + 16,32 * bldloc[i][2] - (bldg_h[0] / 2) + 16,bldg_w[0],bldg_h[0]);
 		  glEnd();
 		}
 		glEndList();
@@ -890,13 +875,51 @@ static void draw_map()
 		{
 		  glBindTexture(GL_TEXTURE_2D, tex_bldg[9]);
 		  glBegin(GL_QUADS);
-			glBox(32 * bldloc[i][1] - (bldg_w[0] / 2) + 16,32 * bldloc[i][2] - (bldg_h[0] / 2) + 16,bldg_w[0],bldg_h[0]);
+//			glBox(32 * bldloc[i][1] - (bldg_w[0] / 2) + 16,32 * bldloc[i][2] - (bldg_h[0] / 2) + 16,bldg_w[0],bldg_h[0]);
 		  glEnd();
 		}
 		glEndList();
 
     }
 	// Well.  All done.
+}
+
+// Helper function: update fog-of-war texture based on HQ and capture points.
+static void draw_fog(int team)
+{
+	// create an all-alpha buffer
+	unsigned char * fogbuf = (unsigned char *)malloc(128 * 128);
+	memset(fogbuf, 0xFF, 128 * 128);
+
+	// for each point owned by this team, clear out a section of the mask
+	const int r = 12;
+
+	for (int y_off = 1; y_off <= r; y_off ++) {
+		float x_off = sqrt(float((r * r) - (y_off * y_off)));
+		for (int i = 0; i < 15; i ++) {
+			if (bldloc[i][0] || i < 4) {
+			int x1 = bldloc[i][1] - (x_off); if (x1 < 0) x1 = 0;
+			int x2 = bldloc[i][1] + (x_off); if (x2 > 99) x2 = 99;
+			if (bldloc[i][2] + y_off < 100)
+				memset(& fogbuf[(bldloc[i][2] + y_off) * 128 + x1], 0, x2 - x1);
+			if (bldloc[i][2] - y_off >= 0)
+				memset(& fogbuf[(bldloc[i][2] - y_off) * 128 + x1], 0, x2 - x1);
+			}
+		}
+		// center line
+		for (int i = 0; i < 15; i ++) {
+			if (bldloc[i][0] || i < 4) {
+			int x1 = bldloc[i][1] - r; if (x1 < 0) x1 = 0;
+			int x2 = bldloc[i][1] + r; if (x2 > 99) x2 = 99;
+			memset(& fogbuf[bldloc[i][2] * 128 + x1], 0, x2 - x1);
+			}
+		}
+	}
+
+	// upload the new tex
+	glBindTexture(GL_TEXTURE_2D, tex_fog);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, 128, 128, 0, GL_ALPHA, GL_UNSIGNED_BYTE, fogbuf);
+	free(fogbuf);
 }
 
 // Helper function: creates the minimap display list.
@@ -946,7 +969,7 @@ static void draw_minimap()
 //    SDL_SaveBMP(ts, "minimap.bmp");
 
 	glBindTexture( GL_TEXTURE_2D, tex_minimap);
-	glTexImage2D(GL_TEXTURE_2D, 0, 4, ts->w, ts->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ts->pixels);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, ts->w, ts->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ts->pixels);
 	SDL_FreeSurface(ts);
 
 	glNewList(list_minimap, GL_COMPILE); {
@@ -1033,6 +1056,7 @@ static char load_map(const char* name)
 
 	draw_map();
 	draw_minimap();
+	draw_fog(0);
 
 	return 1;
 }
@@ -1043,22 +1067,22 @@ static int game_connect()
 	//char buffer[80];
 	char map_name[80] = "maps/x-isle.map";
 
-	if (multiplayer)
+	if (env.multiplayer)
 	{
 		// connect to remote server
         unsigned short int PORT=DEFAULT_PORT;
 
-		 for (i=0; i<(int)strlen(HOSTNAME); i++)
-		   if (HOSTNAME[i] == ':' || HOSTNAME[i]==' ') { PORT=atoi(&HOSTNAME[i+1]); HOSTNAME[i]='\0'; break; }
+		 for (i=0; i<(int)strlen(env.HOSTNAME); i++)
+		   if (env.HOSTNAME[i] == ':' || env.HOSTNAME[i]==' ') { PORT=atoi(&env.HOSTNAME[i+1]); env.HOSTNAME[i]='\0'; break; }
 	 
 			if (!(sd = SDLNet_UDP_Open(0)))
 			{
 				fprintf(stderr, "SDLNet_UDP_Open: %s\n", SDLNet_GetError());
 				return 0;
 			}
-			if (SDLNet_ResolveHost(&srvadd, HOSTNAME, PORT))
+			if (SDLNet_ResolveHost(&srvadd, env.HOSTNAME, PORT))
 			{
-				fprintf(stderr, "SDLNet_ResolveHost(%s %d): %s\n", HOSTNAME, PORT, SDLNet_GetError());
+				fprintf(stderr, "SDLNet_ResolveHost(%s %d): %s\n", env.HOSTNAME, PORT, SDLNet_GetError());
 				return 0;
 			}
 			/* Allocate memory for the packet */
@@ -1111,7 +1135,7 @@ static int game_connect()
 
 static void game_disconnect()
 {
-	if (multiplayer)
+	if (env.multiplayer)
 	{
 		p->data[0]='D';
 		p->len=1;
@@ -1131,31 +1155,31 @@ static void game_quit()
 	glDeleteLists(list_map,1);
 	glDeleteLists(list_cappoint,9);
 
-	glDeleteLists(list_hqmenu,1);
+	glDeleteLists(list_sidebar,2);
+	glDeleteLists(list_fog,1);
 	glDeleteLists(list_minimap,1);
 	glDeleteLists(list_hud,1);
 	glDeleteLists(list_digit,10);
 	glDeleteLists(list_direction,1);
 
 	for (i = 0; i < 2; i ++) {
-		glDeleteLists(list_human[i],NUM_HUMANS);
-		glDeleteLists(list_vehicle[1],NUM_VEHICLES);
+		glDeleteLists(list_unit[i],NUM_UNITS);
 	}
-//	glDeleteLists(list_vehicle_shadow,NUM_VEHICLES);
+//	glDeleteLists(list_unit_shadow,NUM_UNITS);
 	glDeleteLists(list_bullet,NUM_BULLETS);
 	glDeleteLists(list_particle,NUM_PARTICLES);
 
 	glDeleteTextures( 10, tex_digit );
 	glDeleteTextures( 4, tex_hud );
 	for (i = 0; i < 2; i ++) {
-		glDeleteTextures( NUM_HUMANS, tex_human[i] );
-		glDeleteTextures( NUM_VEHICLES, tex_vehicle[1] );
+		glDeleteTextures( NUM_UNITS, tex_unit[i] );
 	}
 	glDeleteTextures( NUM_BULLETS, tex_bullet );
 	glDeleteTextures( NUM_BLDGS, tex_bldg );
 	glDeleteTextures( NUM_TILES+4, tex_tile );
 	glDeleteTextures( NUM_PARTICLES, tex_particle );
-	glDeleteTextures( 1, &tex_hqmenu );
+	glDeleteTextures( 2, tex_sidebar );
+	glDeleteTextures( 1, &tex_fog );
 	glDeleteTextures( 1, &tex_minimap );
 	glDeleteTextures( 1, &tex_dir );
 
@@ -1189,7 +1213,7 @@ static void game_draw()
 //	glClear(GL_COLOR_BUFFER_BIT);// | GL_DEPTH_BUFFER_BIT);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	if (status == 4 || iSeeAll)
+	if (status == 1 || status == 3 || iSeeAll)
 	{
 		glOrtho( 0, 3200 * 4 / 3, 3200, 0, -1.0, 1.0);
 		glMatrixMode(GL_MODELVIEW);
@@ -1215,12 +1239,9 @@ static void game_draw()
 //		if (player_e) {
 //			glTranslatef(-player_e->x,-player_e->y,0);
 //		} else {
-		if (status == 2 && player_e != NULL) {
-			glTranslatef(-( player_e->x + rate * player_e->dx),
-				-(player_e->y + rate * player_e->dy),0);
-		} else if (status == 3 && player_v != NULL) {
-			glTranslatef(-( player_v->x + rate * player_v->dx),
-				-(player_v->y + rate * player_v->dy),0);
+		if (status == 2 && player != NULL) {
+			glTranslatef(-( player->x + rate * player->dx) + (shake * ((float)rand() / RAND_MAX - .5)),
+				-(player->y + rate * player->dy) + (shake * ((float)rand() / RAND_MAX - .5)),0);
 		} else {
 			glTranslatef(-1600,-1600,0);
 		}
@@ -1239,21 +1260,23 @@ static void game_draw()
 	glEnable(GL_ALPHA_TEST);
 
 	// All visible objects
+	/*
 	struct human * h = human_list;
 	while (h != NULL)
 	{
 		draw_human(h, rate);
 		h = h->next;
 	}
+	*/
 
-	// Ground-based vehicles
-	struct vehicle * v = vehicle_list;
+	// Ground-based units
+	struct unit * v = unit_list;
 	while (v != NULL)
 	{
 		if ( !(v->o->flags & PLANE)|| v->speed <= 30)
 		{
 //			draw_shadow(obj);
-			draw_vehicle(v, rate);
+			draw_unit(v, rate);
 		}
 		v = v->next;
 	}
@@ -1270,7 +1293,7 @@ static void game_draw()
 
 	// Airborne objects (planes)
 	/*
-	obj = objects[OBJ_VEHICLE];
+	obj = objects[OBJ_unit];
 	while (obj != NULL)
 	{
 		if (obj->sprite >= 15 && obj->speed > 30) {
@@ -1295,15 +1318,24 @@ static void game_draw()
 
 	// Time to draw the UI.
 	//gotta go back to the old way to draw the cursor right size, and UI.
+	/*
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 	glOrtho(0, SCREEN_X, SCREEN_Y, 0, -1.0, 1.0);
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
-
-	// if player is commander, draw hq menu
-	if (status == 4)
-		glCallList(list_hqmenu);
+*/
+	if (status == 1 || status == 3) {
+		if (status == 1)
+			// draw Redeploy sidebar if not in game yet
+			glCallList(list_sidebar);
+		else if (status == 3)
+			// if player is commander, draw hq menu
+			glCallList(list_sidebar + 1);
+		
+		// Draw fog of war overlay
+		glCallList(list_fog);
+	}
 
 	// Draw HUD
 	glCallList(list_hud);
@@ -1314,8 +1346,12 @@ static void game_draw()
 	draw_number(ammo,40,40);
 	draw_number(health,40,80);
 
+	// if player is dead, draw respawn countdown timer
+	if (status == 1)
+		draw_number( int(respawn_time * UPDATE_FREQ / 1000 + .5), 650, 275);
+
 	// Team cash
-	if (status == 4)
+	if (status == 1 || status == 3)
 	{
 		draw_number(cash[0],640,20);
 		draw_number(cash[1],640,80);
@@ -1360,10 +1396,7 @@ static void game_draw()
 		glColor3f(1,1,1);
 	}
 	// Draw cursor.
-	glPushMatrix();
-		glTranslatef(mx, my, 0);
-		glCallList(list_cursor);
-	glPopMatrix();
+	glDrawCursor(mx, my);
 
 /*	if (globalzoom > 30)
 	{
@@ -1388,12 +1421,14 @@ static void game_draw()
 	SDL_GL_SwapBuffers();
 
 	// FPS counter : )
+	/*
 	frames++;
 	if (fpsticks + 1000 < SDL_GetTicks()) {
 		fpsticks = SDL_GetTicks();
 		printf("FPS: %d\n",frames);
 		frames=0;
 	}
+	*/
 }
 
 static unsigned int rd_int32(unsigned char *p)
@@ -1417,52 +1452,54 @@ static unsigned short rd_int16(unsigned char *p)
 			p[1];
 }
 
-static struct vehicle_child * create_child(const struct object_child * o, struct vehicle_child * parent)
+static struct unit_sub * create_sub(const struct object_sub * o) //, struct unit_sub * parent)
 {
-	struct vehicle_child * c = (struct vehicle_child *) malloc(sizeof(struct vehicle_child));
+	struct unit_sub * c = (struct unit_sub *) malloc(sizeof(struct unit_sub));
 	c->o = o;
 
 	c->angle = 0;
 
-	c->occupied = 0;
-	c->parent = parent;
+	c->flags = 0;
+//	c->parent = parent;
 
-	if (o->child != NULL)
-		c->child = create_child(o->child, c);
+	if (o->sub != NULL)
+		c->sub = create_sub(o->sub);
 	else
-		c->child = NULL;
+		c->sub = NULL;
 
 	// TODO make this iterative?
 	if (o->next != NULL)
-		c->next = create_child(o->next, parent);
+		c->next = create_sub(o->next);
 	else
 		c->next = NULL;
 
 	return c;
 }
 
-void free_child(struct vehicle_child * c)
+void free_sub(struct unit_sub * c)
 {
 	while (c != NULL)
 	{
-		free_child(c->child);
-		struct vehicle_child * n = c->next;
+		free_sub(c->sub);
+		struct unit_sub * n = c->next;
 		free(c);
 		c = n;
 	}
 }
 
-static unsigned char *unserialize_child(unsigned char *payload, struct vehicle_child * v)
+static unsigned char *unserialize_sub(unsigned char *payload, struct unit_sub * v)
 {
 	do {
 		unsigned short occupant_angle = rd_int16(payload); payload += 2;
-		v->occupied = occupant_angle >> 15;
-		v->angle = (occupant_angle & 0x7FFF) * M_PI / 32768.0;
+		v->flags = occupant_angle >> 15;
+		v->angle = (occupant_angle & 0x7FFF) * M_PI / 16384.0;
+//		printf(" unserialized angle = %f\n", v->angle);
 
-//		printf(" . child: occ=%u ang=%f\n", v->occupied, v->angle);
 
-		if (v->child)
-			payload = unserialize_child(payload, v->child);
+//		printf(" . sub: occ=%u ang=%f\n", v->occupied, v->angle);
+
+		if (v->sub)
+			payload = unserialize_sub(payload, v->sub);
 
 		v = v->next;
 	} while (v != NULL);
@@ -1478,10 +1515,16 @@ static void unserialize(unsigned char *payload)
 	// Unserializes the server-response for "game update".
 	//  Global info
 	// Unserialize capture-points owner
+	//  Note that if there's a change in ownership, we need to update the fog-of-war too.
+	int owner_change = 0;
 	for (i = 0; i < 3; i ++) {
+		int prev_owner = owner[i];
 		owner[i] = (*payload >> (i * 2)) & 0x3;
+		if (prev_owner != owner[i]) owner_change = 1;
 	}
 	payload ++;
+
+	if (owner_change) draw_fog(0);
 
 	// Cash
 	for (i = 0; i < 2; i ++) {
@@ -1491,128 +1534,46 @@ static void unserialize(unsigned char *payload)
 	// Player status
 	status = *payload; payload ++;
 
-	// Player entity ID and other local info
-	id = rd_int16(payload); payload += 2;
-//	printf("My ID is %u\n", id);
-	health = *payload; payload ++;
-	if (status == 2)
-		ammo = *payload;
-	else
-		seat = *payload;
-
-	payload ++;
-
-	player_e = NULL;
-	player_v = NULL;
-
-	// Human updates.
-	{
-		//  A new entity list where we stash everything we already knew about or created
-		struct human * l = NULL;
-
-		unsigned char human_count = *payload; payload ++;
-		for (i = 0; i < human_count; i ++)
-		{
-			unsigned short human_id = rd_int16(payload); payload += 2;
-
-			// Try to locate the object in the local listing.
-			struct human * prev = NULL;
-			struct human * h = human_list;
-			while (h != NULL) {
-				if (h->id == human_id) {
-					// matched!  splice object out of prev. entity list
-					if (prev)
-						prev->next = h->next;
-					else
-						human_list = h->next;
-
-					break;
-				}
-
-				// not matched, keep looking
-				prev = h;
-				h = h->next;
-			}
-
-			if (h == NULL) {
-				// didn't find it, need to clone a fresh copy from the library
-				h = (struct human *)malloc(sizeof(struct human));
-				h->id = human_id;
-
-				h->legs = 0;
-			}
-
-			// unpack the payload and update the item
-			unsigned char team_weapon_speed = *payload; payload ++;
-
-			// first byte
-			h->team = team_weapon_speed >> 7;
-			h->weapon = (team_weapon_speed & 0x7F) >> 2;
-
-			if ((team_weapon_speed & 0x3) == 2) h->speed = 15;
-			else if ((team_weapon_speed & 0x3) == 1) h->speed = -15;
-			else h->speed = 0;
-
-			unsigned int xy = rd_int24(payload); payload += 3;
-			h->x = xy >> 12;
-			h->y = xy & 0xFFF;
-
-			unsigned short angle_aim = rd_int16(payload); payload += 2;
-			h->angle = (angle_aim >> 12) * M_PI / 8.0;
-			h->aim = (angle_aim & 0xFFF) * M_PI / 2048.0;
-
-//			printf("Parsed human: %u, team=%u, weap=%u, x=%u, y=%u\n", h->id, h->team, h->weapon, h->x, h->y);
-			// place object into New Entity List
-			h->next = l;
-			l = h;
-
-			// computations
-			// flip legs image if moving
-			if (h->speed) h->legs = !h->legs;
-			h->dx = h->speed * cos(h->angle);
-			h->dy = h->speed * sin(h->angle);
-
-			// cache the player entity here for camera centering etc
-			if (status == 2 && human_id == id)
-			{
-				player_e = h;
-//				camX = h->x;
-//				camY = h->y;
-			}
-		}
-
-		// delete old entity_list
-		while (human_list != NULL) {
-			struct human * h = human_list->next;
-			free(human_list);
-			human_list = h;
-		}
-
-		human_list = l;
+	switch(status) {
+		case 1:
+			respawn_time = *payload; payload ++;
+			break;
+		case 2:
+			// Player entity ID and other local info
+			id = rd_int16(payload); payload += 2;
+			seat = *payload; payload ++;
+			health = *payload; payload ++;
+			ammo = *payload; payload ++;
+			break;
+		case 3:
+			// Player entity ID and other local info
+			break;
 	}
 
-	// vehicle updates.
+	player = NULL;
+
+	// Unit updates.
 	{
 		//  A new entity list where we stash everything we already knew about or created
-		struct vehicle * l = NULL;
+		struct unit * l = NULL;
 
-		unsigned char vehicle_count = *payload; payload ++;
+		unsigned char unit_count = *payload; payload ++;
 
-		for (i = 0; i < vehicle_count; i ++)
+		for (i = 0; i < unit_count; i ++)
 		{
-			unsigned short vehicle_id = rd_int16(payload); payload += 2;
-			unsigned char team_occupied_type = *payload; payload ++;
+			unsigned short unit_id = rd_int16(payload); payload += 2;
+			unsigned char team_type = *payload; payload ++;
 
 			// Try to locate the object in the local listing.
-			struct vehicle * prev = NULL;
-			struct vehicle * v = vehicle_list;
+			struct unit * prev = NULL;
+			struct unit * v = unit_list;
 			while (v != NULL) {
-				if (v->id == vehicle_id) {
+				if (v->id == unit_id) {
 					// matched!  splice object out of prev. entity list
 					if (prev)
 						prev->next = v->next;
 					else
-						vehicle_list = v->next;
+						unit_list = v->next;
 
 					break;
 				}
@@ -1624,23 +1585,35 @@ static void unserialize(unsigned char *payload)
 
 			if (v == NULL) {
 				// didn't find it, need to clone a fresh copy from the library
-				v = (struct vehicle *)malloc(sizeof(struct vehicle));
-				v->id = vehicle_id;
+				unsigned char type = team_type & 0x7F;
 
-				v->type = team_occupied_type & 0x3F;
-				v->o = vehicle_detail[v->type];
-//printf("cloned a vehicle type %u\n", v->type);
+				// search the library for an object of this type
+				const struct object_base * o = object_root;
+				while (o != NULL && o->type != type) {
+					o = o->next;
+				}
 
-				if (v->o->child != NULL)
-					v->child = create_child(v->o->child, NULL);
-				else
-					v->child = NULL;
+				if (o == NULL) {
+					// this is a fatal error!  the server told us about a unit ID we have never heard of
+					fprintf(stderr, "ERROR: Server requested unit type %d which is unknown\n", type);
+					return;
+//					gamestate = gs_exit;
+				}
+
+				v = (struct unit *) malloc(sizeof(struct unit));
+
+				// set the ptr to the library object
+				v->o = o;
+
+				v->id = unit_id;
+
+				v->sub = create_sub(o->sub);
 			}
 
 			// unpack the payload and update the item
-			v->team = team_occupied_type >> 7;
-			v->occupied = team_occupied_type & 0x40;
-//			v->type = team_occupied_type & 0x3F;
+			v->team = team_type >> 7;
+			v->flags = 0; //team_occupied_type & 0x40;
+//			v->type = team_occupied_type & 0x7F;
 
 			// object x, y, angle, and speed
 			unsigned int xy = rd_int24(payload); payload += 3;
@@ -1650,14 +1623,13 @@ static void unserialize(unsigned char *payload)
 			// speed max is +-64 (7 bits)
 			// angle in 512 steps (9 bits)
 			unsigned short angle_speed = rd_int16(payload); payload += 2;
-			v->angle = (angle_speed >> 7) * M_PI / 256.0;
-			v->speed = ((short)angle_speed) & 0x7F;
+			v->angle = (angle_speed & 0x01FF) * M_PI / 256.0;
+			v->speed = ((short)angle_speed) >> 9;
 
-			//printf("Parsed vehicle: %u, team=%u, type=%u, occupied=%u, x=%u, y=%u, angle=%f, speed=%d\n", v->id, v->team, v->type, v->occupied, v->x, v->y, v->angle, v->speed);
+			//printf("Parsed unit: %u, team=%u, type=%u, occupied=%u, x=%u, y=%u, angle=%f, speed=%d\n", v->id, v->team, v->o->type, 0, v->x, v->y, v->angle, v->speed);
 
-			// and now: the children
-			if (v->child)
-				payload = unserialize_child(payload, v->child);
+			// and now: the subchild
+			payload = unserialize_sub(payload, v->sub);
 
 			// place object into New Entity List
 			v->next = l;
@@ -1668,23 +1640,23 @@ static void unserialize(unsigned char *payload)
 			v->dy = v->speed * sin(v->angle);
 
 			// cache the player entity here for camera centering etc
-			if (status == 3 && vehicle_id == id)
+			if (status == 2 && unit_id == id)
 			{
-				player_v = v;
+				player = v;
 //				camX = h->x;
 //				camY = h->y;
 			}
 		}
 
 		// delete old entity_list
-		while (vehicle_list != NULL) {
-			struct vehicle * v = vehicle_list->next;
-			free_child(vehicle_list->child);
-			free(vehicle_list);
-			vehicle_list = v;
+		while (unit_list != NULL) {
+			struct unit * v = unit_list->next;
+			free_sub(unit_list->sub);
+			free(unit_list);
+			unit_list = v;
 		}
 
-		vehicle_list = l;
+		unit_list = l;
 	}
 
 	// Projectile updates.
@@ -1775,15 +1747,15 @@ static void unserialize(unsigned char *payload)
 
 			unsigned char type = *payload; payload ++;
 
-			float life = *payload / 256.0f;
+			float delay = *payload / 256.0f; payload ++;
 
 			effect * e = (struct effect *)malloc(sizeof(struct effect));
 			e->x = x;
 			e->y = y;
 			e->type = type;
-			e->time = life;
+			e->time = delay;
 
-			printf("effect: type=%u, xy=%u, %u, time=%f\n", e->type, e->x, e->y, e->time);
+			//printf("effect: type=%u, xy=%u, %u, time=%f\n", e->type, e->x, e->y, e->time);
 
 			e->next = effect_list;
 			effect_list = e;
@@ -1857,7 +1829,7 @@ static char game_update()
 			}
 		} else {
 //			printf(" - Continue as J as life %f >= rate %f\n", j->life, rate);
-			if (projectile_detail[j->type].trail && (rand() % 3) == 0) {
+			if ((projectile_detail[j->type].flags & TRAIL) && (rand() % 3) == 0) {
 				/* make a particle */
 				struct particle * t = (struct particle *)malloc(sizeof(struct particle));
 				t->type = 0;
@@ -1865,7 +1837,7 @@ static char game_update()
 				t->r = t->g = t->b = rgb;
 
 				float q = (float)rand() / RAND_MAX;
-				t->angle = j->angle + (3 * M_PI / 4) + (q * (M_PI / 2));
+				t->angle = j->angle + (3 * M_PI_4) + (q * M_PI_2);
 				t->x = j->x + rate * j->dx;
 				t->y = j->y + rate * j->dy;
 
@@ -1894,6 +1866,13 @@ static char game_update()
 			// it is time
 			if (e->type == 1) {
 				// explosion
+				// screen shake
+				float dist = sqr(player->x - e->x) + sqr(player->y - e->y);
+//				printf("Dist is %d-%d %d-%d %f (%f)\n", player->x, e->x, player->y, e->y, dist, sqrt(dist));
+/*				if (dist < 250000) {
+					shake += (500 - sqrt(dist)) / 5;
+				}
+*/
 				for (int i = 0; i < 128; i ++) {
 					struct particle * t = (struct particle *)malloc(sizeof(struct particle));
 
@@ -1910,7 +1889,7 @@ static char game_update()
 					t->y = e->y;
 
 					float q = (float)rand() / RAND_MAX;
-					t->angle = rand() / ((float)RAND_MAX / (M_PI * 2));
+					t->angle = rand() / ((float)RAND_MAX / M_TAU);
 //					printf(" . particle created at xy=%u, %u, angle=%f\n", t->x, t->y, t->angle);
 					t->scale = q;
 					t->speed = 48 * (1.1 - q);
@@ -1964,7 +1943,7 @@ static char game_update()
 				} else {
 					if (event.key.keysym.sym == SDLK_RETURN)
 					{
-						if (multiplayer) {
+						if (env.multiplayer) {
 							if (bChatting == 1)
 								sprintf((char *)p->data,"C%s",cMesg);
 							else
@@ -2018,7 +1997,7 @@ static char game_update()
 					bChatting = 1;
 			        SDL_EnableUNICODE( 1 );
 				}
-				else if (multiplayer && (event.key.keysym.sym == SDLK_t))
+				else if (env.multiplayer && (event.key.keysym.sym == SDLK_t))
 				{
 					bChatting = 2;
 			        SDL_EnableUNICODE( 1 );
@@ -2027,23 +2006,30 @@ static char game_update()
 			case SDL_MOUSEBUTTONDOWN:
 				mx=event.motion.x;
 				my=event.motion.y;
-				if (status == 2) {
+				if (status == 1) {
+					if (event.button.button == SDL_BUTTON_LEFT)
+						localcontrols[4] = 1;
+				}
+				else if (status == 2) {
 					// figure out my new facing.
 
 					// localaim is an absolute (heading)
 					localaim = atan2(my - 300.0f, mx - 400.0f);
-					if (localaim < 0) localaim += (2 * M_PI);
+					if (localaim < 0) localaim += M_TAU;
 
 					// convert this into a bearing, for display
-					float aim = localaim - player_e->angle;
+					/*
+					float aim = localaim - player->angle;
 					// get the range back to -pi to +pi
-					if (aim < -M_PI) aim += M_PI * 2;
-					else if (aim > M_PI) aim -= M_PI * 2;
-
+					if (aim < -M_PI) aim += M_TAU;
+					else if (aim > M_PI) aim -= M_TAU;
+*/
 					// cap range to -pi/2 to pi/2 for our controlled player
-					if (aim > M_PI/2) player_e->aim = M_PI/2;
-					else if (aim < -M_PI/2) player_e->aim = -M_PI/2;
-					else player_e->aim = aim;
+					/*
+					if (aim > M_PI/2) player->aim = M_PI/2;
+					else if (aim < -M_PI/2) player->aim = -M_PI/2;
+					else player->aim = aim;
+					*/
 
 					if (event.button.button == SDL_BUTTON_LEFT)
 						localcontrols[4] = 1;
@@ -2095,23 +2081,29 @@ static char game_update()
 			case SDL_MOUSEBUTTONUP:
 				mx=event.motion.x;
 				my=event.motion.y;
-				if (status == 2) {
+				if (status == 1) {
+					if (event.button.button == SDL_BUTTON_LEFT)
+						localcontrols[4] = 0;
+				}
+				else if (status == 2) {
 					// figure out my new facing.
 
 					// localaim is an absolute (heading)
 					localaim = atan2(my - 300.0f, mx - 400.0f);
-					if (localaim < 0) localaim += (2 * M_PI);
+					if (localaim < 0) localaim += M_TAU;
 
 					// convert this into a bearing, for display
-					float aim = localaim - player_e->angle;
+					float aim = localaim - player->angle;
 					// get the range back to -pi to +pi
-					if (aim < -M_PI) aim += M_PI * 2;
-					else if (aim > M_PI) aim -= M_PI * 2;
+					if (aim < -M_PI) aim += M_TAU;
+					else if (aim > M_PI) aim -= M_TAU;
 
 					// cap range to -pi/2 to pi/2 for our controlled player
-					if (aim > M_PI/2) player_e->aim = M_PI/2;
-					else if (aim < -M_PI/2) player_e->aim = -M_PI/2;
-					else player_e->aim = aim;
+					/*
+					if (aim > M_PI/2) player->aim = M_PI/2;
+					else if (aim < -M_PI/2) player->aim = -M_PI/2;
+					else player->aim = aim;
+					*/
 
 					if (event.button.button == SDL_BUTTON_LEFT)
 						localcontrols[4] = 0;
@@ -2127,18 +2119,20 @@ static char game_update()
 
 					// localaim is an absolute (heading)
 					localaim = atan2(my - 300.0f, mx - 400.0f);
-					if (localaim < 0) localaim += (2 * M_PI);
+					if (localaim < 0) localaim += M_TAU;
 
 					// convert this into a bearing, for display
-					float aim = localaim - player_e->angle;
+					float aim = localaim - player->angle;
 					// get the range back to -pi to +pi
-					if (aim < -M_PI) aim += M_PI * 2;
-					else if (aim > M_PI) aim -= M_PI * 2;
+					if (aim < -M_PI) aim += M_TAU;
+					else if (aim > M_PI) aim -= M_TAU;
 
 					// cap range to -pi/2 to pi/2 for our controlled player
-					if (aim > M_PI/2) player_e->aim = M_PI/2;
-					else if (aim < -M_PI/2) player_e->aim = -M_PI/2;
-					else player_e->aim = aim;
+					/*
+					if (aim > M_PI/2) player->aim = M_PI/2;
+					else if (aim < -M_PI/2) player->aim = -M_PI/2;
+					else player->aim = aim;
+					*/
 				}
 /*				if (status == 3)
 				{
@@ -2165,13 +2159,18 @@ static char game_update()
 	}
 
 	/* Send updates to the server, and check for server activity */
-	if (multiplayer)
+	if (env.multiplayer)
 	{
 		if (ticks >= next_control_tick)
 		{
 			next_control_tick = ticks + CONTROL_FREQ;
 
-			if (status != 4) {
+			if (status == 1) {
+				p->data[0] = localcontrols[4];
+				p->data[1] = localcontrols[5];
+				p->data[2] = localcontrols[8];
+				p->len = 3;
+			} else if (status == 2) {
 				// A regular control update.
 				//  A two-byte packet: bitfields packed in byte 1, and byte 2 holds angle as char.
 				p->data[0] = 0;
@@ -2216,15 +2215,13 @@ static char game_update()
 		}
 	} else {
 		// we just control the local game directly
-		if (status == 4)
-		{
-			control_game_hq(slot,
+		if (status == 1) {
+			control_game_deploy(slot,
 				mx / 6,
 				min(my / 6, 100),
-				0,
-				0,
-				localcontrols[7]);
-		} else if (status == 2 || status == 3) {
+				localcontrols[4]
+			);
+		} else if (status == 2) {
 			control_game_regular(slot,
 				localcontrols[2] ? 1 : (localcontrols[3] ? -1 : 0),
 				localcontrols[1] ? 1 : (localcontrols[0] ? -1 : 0),
@@ -2233,10 +2230,19 @@ static char game_update()
 				localcontrols[6],
 				localcontrols[7],
 				localaim);
+		} else if (status == 3) {
+			control_game_hq(slot,
+				mx / 6,
+				min(my / 6, 100),
+				0,
+				0,
+				localcontrols[7]);
 		}
 
 		if (next_server_tick <= ticks)
 		{
+			shake /= 2;
+
 			last_update_tick = ticks;
 			next_server_tick = ticks + UPDATE_FREQ;
 			update_game();

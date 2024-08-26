@@ -2,20 +2,18 @@
 #include "options.h"
 
 // Texture operations + music
-#include "function.h"
+#include "common_client.h"
 
-// Externs used by this sub-section
-extern unsigned char vol_music, vol_sfx;
-extern long mx, my;
-extern GLuint list_cursor;
+// game globals
+extern struct env_t env;
 
-char do_gs_options()
+int do_gs_options()
 {
 	// options init section.
 	//  Load texture from disk.
 	GLuint tex_options = load_texture("img/ui/options.png",GL_LINEAR,GL_LINEAR);
 	if (!tex_options)
-		return 0;
+		return gs_exit;
 
 	// Make a display list in which we draw a full-screen quad.
 	GLuint list_options = glGenLists(1);
@@ -23,24 +21,23 @@ char do_gs_options()
 		// DISable alpha test: no transparency for backdrop!
 		glDisable(GL_ALPHA_TEST);
 		// bind cursor texture
-		glBindTexture(GL_TEXTURE_2D, tex_options);
-		// draw a quad, top-left corner at 0,0
-		glBegin(GL_QUADS);
-			glBox(0,0,SCREEN_X,SCREEN_Y);
-		glEnd();
+		glBox(tex_options, SCREEN_X, SCREEN_Y);
 	glEndList();
 
 	// Another display list, this one just a black quad, for checked options
 	GLuint list_option_checked = glGenLists(1);
 	glNewList(list_option_checked, GL_COMPILE);
-		glColor3f(0.0f,0.0f,0.0f);
+		if (! env.ok_audio)
+			glColor3f(0.5f,0.25f,0.25f);
+		else
+			glColor3f(0.0f,0.0f,0.0f);
 
 		glDisable(GL_TEXTURE_2D);
 		glBegin(GL_QUADS);
-			glVertex2i(292,245);
-			glVertex2i(325,245);
-			glVertex2i(325,272);
-			glVertex2i(292,272);
+			glVertex2s(-108,-55);
+			glVertex2s(-75,-55);
+			glVertex2s(-75,-28);
+			glVertex2s(-108,-28);
 		glEnd();
 		glEnable(GL_TEXTURE_2D);
 
@@ -51,14 +48,17 @@ char do_gs_options()
 	Mix_Music *music = music_play("audio/options.mod");
 
 	// GL setup for this screen: no alpha blending, yes texturing
-	glDisable(GL_BLEND);
-	glEnable(GL_TEXTURE_2D);
+	//glDisable(GL_BLEND);
+	//glEnable(GL_TEXTURE_2D);
 
+	// mouse state
+	int mx, my;
+	SDL_GetMouseState(&mx, &my);
 	// dirty flag: redraw screen
-	unsigned char dirty=1;
-	char retval = gs_options;
+	int dirty=1;
+	int state = gs_options;
 
-	while (retval == gs_options)
+	while (state == gs_options)
 	{
 		if (dirty)
 		{
@@ -66,13 +66,10 @@ char do_gs_options()
 //			glClear(GL_COLOR_BUFFER_BIT);
 			glCallList(list_options);
 
-			if (vol_sfx) glCallList(list_option_checked);
+			if (env.volume || !env.ok_audio) glCallList(list_option_checked);
 
-			// Draw mouse cursor over main menu.
-			glPushMatrix();
-				glTranslatef(mx, my, 0);
-				glCallList(list_cursor);
-			glPopMatrix();
+			// Draw mouse cursor over menu.
+			glDrawCursor(mx, my);
 
 			// Flip the backbuffer to the primary
 			SDL_GL_SwapBuffers();
@@ -90,24 +87,32 @@ char do_gs_options()
 			{
 			case SDL_KEYUP:
 				if (event.key.keysym.sym == SDLK_ESCAPE)
-					retval = gs_title;
+					state = gs_title;
+				break;
+			case SDL_MOUSEBUTTONDOWN:
+				mx = event.button.x;
+				my = event.button.y;
+				dirty = 1;
 				break;
 			case SDL_MOUSEBUTTONUP:
-				if (event.button.x>286 && event.button.x<522 && event.button.y > 239 && event.button.y < 277)
-				{
-					if (vol_sfx)
+				mx = event.button.x;
+				my = event.button.y;
+				dirty = 1;
+				if(event.button.button == SDL_BUTTON_LEFT){
+					if (event.button.x>286 && event.button.x<522 && event.button.y > 239 && event.button.y < 277 && env.ok_audio)
 					{
-						Mix_HaltMusic();
-						Mix_FreeMusic(music);
-						vol_sfx=0;
-					} else {
-						music = music_play("audio/options.mod");
-						vol_sfx=MIX_MAX_VOLUME;
+						if (env.volume)
+						{
+							Mix_FreeMusic(music);
+							env.volume=0;
+						} else {
+							music = music_play("audio/options.mod");
+							env.volume=MIX_MAX_VOLUME;
+						}
 					}
-					dirty = 1;
+					else if (event.button.x>291 && event.button.x<512 && event.button.y > 511 && event.button.y < 591)
+						state = gs_title;
 				}
-				else if (event.button.x>291 && event.button.x<512 && event.button.y > 511 && event.button.y < 591)
-					retval = gs_title;
 				break;
 			case SDL_MOUSEMOTION:
 				 mx=event.motion.x;
@@ -115,7 +120,7 @@ char do_gs_options()
 				 dirty = 1;
 				 break;
 			case SDL_QUIT:
-				retval = gs_exit;
+				state = gs_exit;
 				break;
 			case SDL_VIDEOEXPOSE:
 				dirty = 1;
@@ -130,13 +135,13 @@ char do_gs_options()
 	}
 
 	// Stop music playback, if it was playing
-	if (music) Mix_FreeMusic(music);
+	Mix_FreeMusic(music);
 
 	// Clean up OpenGL stuff for this screen
 	glDeleteLists(list_option_checked, 1);
 	glDeleteLists(list_options, 1);
 	glDeleteTextures( 1, &tex_options );
 
-	return retval;
+	return state;
 }
 

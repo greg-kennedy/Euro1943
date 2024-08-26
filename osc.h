@@ -16,4 +16,6 @@
 // How many milliseconds to wait for the response.
 #define MAX_WAIT 3000
 
+#include <SDL/SDL_net.h>
+
 unsigned int GetMetaserverBlock (char *ip, int port, unsigned char type, int blocknum, IPaddress **iplist);

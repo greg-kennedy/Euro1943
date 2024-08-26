@@ -1,21 +1,14 @@
 /* multimenu.cpp - multiplayer game menu */
 #include "multimenu.h"
 
-// Texture operations
-#include "function.h"
 // used by Overserver
 #include "osc.h"
 
-// Externs used by this sub-section
-extern unsigned char vol_music;
-extern long mx, my;
-extern GLuint list_cursor;
+// Texture operations + music
+#include "common_client.h"
 
-// Hostname to connect to
-extern char HOSTNAME[80];
-
-extern char OS_LOC[80];
-extern unsigned short OS_PORT;
+// game globals
+extern struct env_t env;
 
 static int min(int a, int b)
 {
@@ -23,7 +16,7 @@ static int min(int a, int b)
 	return b;
 }
 
-char do_gs_multimenu()
+int do_gs_multimenu()
 {
 	// Multimenu init section.
 	int num=0, i;
@@ -32,13 +25,13 @@ char do_gs_multimenu()
 
 	char buffer[80];
 
-	memset(HOSTNAME,0,80);
-	sprintf(HOSTNAME,"localhost");
+	memset(env.HOSTNAME,'\0',80);
+	sprintf(env.HOSTNAME,"localhost");
 
 	unsigned char editingIP=0;
 
 	// Go ask OverServer for the top block of IPs.
-	num=GetMetaserverBlock (OS_LOC, OS_PORT, 5, 0, &iplist);
+	num=GetMetaserverBlock (env.OS_LOC, env.OS_PORT, 5, 0, &iplist);
 
 	//  Load texture from disk.
 	GLuint tex_multimenu = load_texture("img/ui/multimenu.png",GL_LINEAR,GL_LINEAR);
@@ -51,11 +44,7 @@ char do_gs_multimenu()
 		// DISable alpha test: no transparency for backdrop!
 		glDisable(GL_ALPHA_TEST);
 		// bind cursor texture
-		glBindTexture(GL_TEXTURE_2D, tex_multimenu);
-		// draw a quad, top-left corner at 0,0
-		glBegin(GL_QUADS);
-			glBox(0,0,SCREEN_X,SCREEN_Y);
-		glEnd();
+		glBox(tex_multimenu, SCREEN_X, SCREEN_Y);
 	glEndList();
 
 	/* Play music */
@@ -65,6 +54,9 @@ char do_gs_multimenu()
 	glDisable(GL_BLEND);
 	glEnable(GL_TEXTURE_2D);
 
+	// mouse state
+	int mx, my;
+	SDL_GetMouseState(&mx, &my);
 	// dirty flag (needs redraw)
 	unsigned char dirty=1;
 	char retval = gs_multimenu;
@@ -83,7 +75,7 @@ char do_gs_multimenu()
 				glColor3f(0.0,0.0,0.0);
 			else
 				glColor3f(1.0,1.0,0.0);
-			glPrint(460, 180, HOSTNAME);
+			glPrint(460, 180, env.HOSTNAME);
 
 			glColor3f(0.0,0.0,0.0);
 
@@ -106,10 +98,7 @@ char do_gs_multimenu()
 			glColor3f(1.0,1.0,1.0);
 
 			// Draw mouse cursor over main menu.
-			glPushMatrix();
-				glTranslatef(mx, my, 0);
-				glCallList(list_cursor);
-			glPopMatrix();
+			glDrawCursor(mx, my);
 
 			// Flip the backbuffer to the primary
 			SDL_GL_SwapBuffers();
@@ -138,10 +127,10 @@ char do_gs_multimenu()
 					break;
 				case SDL_KEYDOWN:
 					if (editingIP) {
-						if (event.key.keysym.sym == SDLK_BACKSPACE && strlen(HOSTNAME) > 0)
-							HOSTNAME[strlen(HOSTNAME)-1]='\0';
-						else if (strlen(HOSTNAME) < 31 && event.key.keysym.unicode < 0x80 && event.key.keysym.unicode >= 0x20) {
-							HOSTNAME[strlen(HOSTNAME)]=(char)(event.key.keysym.unicode);							
+						if (event.key.keysym.sym == SDLK_BACKSPACE && strlen(env.HOSTNAME) > 0)
+							env.HOSTNAME[strlen(env.HOSTNAME)-1]='\0';
+						else if (strlen(env.HOSTNAME) < 31 && event.key.keysym.unicode < 0x80 && event.key.keysym.unicode >= 0x20) {
+							env.HOSTNAME[strlen(env.HOSTNAME)]=(char)(event.key.keysym.unicode);							
 						}
 					dirty = 1;
 					}
@@ -164,7 +153,7 @@ char do_gs_multimenu()
 					else if (event.button.x > 51 && event.button.x < 399 && event.button.y > 155 && event.button.y < 544 && num>0)
 					{
 						picked_server = min((event.button.y - 155) / 10, num - 1);
-						sprintf(HOSTNAME,"%d.%d.%d.%d:%d",iplist[picked_server].host & 0x000000FF,
+						sprintf(env.HOSTNAME,"%d.%d.%d.%d:%d",iplist[picked_server].host & 0x000000FF,
 								(iplist[picked_server].host & 0x0000FF00) >> 8,
 								(iplist[picked_server].host & 0x00FF0000) >> 16,
 								(iplist[picked_server].host & 0xFF000000) >> 24, iplist[picked_server].port);

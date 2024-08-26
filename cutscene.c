@@ -1,16 +1,14 @@
 /* cutscene.cpp - displays cutscenes by number */
 #include "cutscene.h"
 
-// messagebox (speech bubble) used on this screen
-#include "message.h"
-// texture operations, also music_play
-#include "function.h"
+// Texture operations + music
+#include "common_client.h"
 
 // how many frames make up a cutscene
 #define NUM_FRAMES 3
 
 // how long can the script be
-#define MAX_SCRIPT_LEN 20
+#define MAX_SCRIPT_LEN 40
 #define SCRIPT_LINE_LEN 80
 
 // Simply-scripted cutscene action tokens.
@@ -20,10 +18,10 @@
 #define CS_DELAY 3
 #define CS_END 4
 
-// Pull external "level" value from main.cpp (shared with game)
-extern int level;
+// game globals
+extern struct env_t env;
 
-char do_gs_cutscene()
+int do_gs_cutscene()
 {
 	char buffer[64];
 
@@ -33,7 +31,7 @@ char do_gs_cutscene()
 
 	// Cutscene screen init section.
 	//  First up, load the cutscene script.
-	sprintf(buffer,"cutscene/%d/scene.txt",level);
+	sprintf(buffer,"cutscene/%d/scene.txt",env.level);
 	FILE *fp = fopen(buffer,"r");
 	if (fp == NULL) { return gs_title; }
 	int i = 0;
@@ -82,7 +80,7 @@ char do_gs_cutscene()
 	GLuint tex_frame[NUM_FRAMES];
 	for (i=0; i<NUM_FRAMES; i++)
 	{
-		sprintf(buffer,"cutscene/%d/%d.png",level,i);
+		sprintf(buffer,"cutscene/%d/%d.png",env.level,i);
 		tex_frame[i] = load_texture(buffer,GL_LINEAR,GL_LINEAR);
 	}
 
@@ -95,40 +93,41 @@ char do_gs_cutscene()
 		// bind left-film edge texture
 		glBindTexture(GL_TEXTURE_2D, tex_film[0]);
 	   	glBegin(GL_QUADS);
-			glTexCoord2f(0,0);
-			glVertex2i(0, 0);
-			glTexCoord2f(1,0);
-			glVertex2i(128, 0);
-			glTexCoord2f(1,2);
-			glVertex2i(128, SCREEN_Y * 2);
-			glTexCoord2f(0,2);
-			glVertex2i(0, SCREEN_Y * 2);
+			glTexCoord2s(0,0);
+			glVertex2s(-400, - SCREEN_Y * .5);
+			glTexCoord2s(1,0);
+			glVertex2s(-272, - SCREEN_Y * .5);
+			glTexCoord2s(1,2);
+			glVertex2s(-272, SCREEN_Y * 1.5);
+			glTexCoord2s(0,2);
+			glVertex2s(-400, SCREEN_Y * 1.5);
 		glEnd();
 		// bind right-film edge texture
 		glBindTexture(GL_TEXTURE_2D, tex_film[1]);
 	   	glBegin(GL_QUADS);
-			glTexCoord2f(0,0);
-			glVertex2i(SCREEN_X - 128, 0);
-			glTexCoord2f(1,0);
-			glVertex2i(SCREEN_X, 0);
-			glTexCoord2f(1,2);
-			glVertex2i(SCREEN_X, SCREEN_Y * 2);
-			glTexCoord2f(0,2);
-			glVertex2i(SCREEN_X - 128, SCREEN_Y * 2);
+			glTexCoord2s(0,0);
+			glVertex2s(272,  - SCREEN_Y * .5);
+			glTexCoord2s(1,0);
+			glVertex2s(400,  - SCREEN_Y * .5);
+			glTexCoord2s(1,2);
+			glVertex2s(400, SCREEN_Y * 1.5);
+			glTexCoord2s(0,2);
+			glVertex2s(272, SCREEN_Y * 1.5);
 		glEnd();
 	glEndList();
 
-	// one for the main cutscene (don't bind texture here, save that for later)
-	GLuint list_frame = glGenLists(1);
-	glNewList(list_frame, GL_COMPILE);
-	   	glBegin(GL_QUADS);
-	   		glBox(128,0,SCREEN_X-256,SCREEN_Y);
-		glEnd();
-	glEndList();
+	// one for the main cutscene
+	GLuint list_frame = glGenLists(3);
+	for (i=0; i<NUM_FRAMES; i++)
+	{
+		glNewList(list_frame + i, GL_COMPILE);
+		glBox(tex_frame[i], SCREEN_Y, SCREEN_Y);
+		glEndList();
+	}
 
 	// MUSIC
 	/* This is the music to play. */
-	sprintf(buffer,"cutscene/%d/bg.xm",level);
+	sprintf(buffer,"cutscene/%d/bg.xm",env.level);
 	Mix_Music *music = music_play(buffer);
 
 	// GL setup for this screen
@@ -149,9 +148,9 @@ char do_gs_cutscene()
 
 	// dirty (partial screen redraw)
 	unsigned char dirty = 1;
-	char retval = gs_cutscene;
+	int state = gs_cutscene;
 
-	while (retval==gs_cutscene)
+	while (state==gs_cutscene)
 	{
 		// Timed events.
 		unsigned int ticks = SDL_GetTicks();
@@ -180,10 +179,10 @@ char do_gs_cutscene()
 					script_ticks = 1000 * atoi(script_param[scriptpos]) + ticks;
 					break;
 				case CS_END:
-					if (level > 3)
-						retval=gs_title;
+					if (env.level > 3)
+						state=gs_title;
 					else
-						retval=gs_game;
+						state=gs_game;
 					break;
 				case CS_DEFAULT:
 				default:
@@ -200,8 +199,7 @@ char do_gs_cutscene()
 				glCallList(list_film);
 			glPopMatrix();
 
-			glBindTexture(GL_TEXTURE_2D, tex_frame[curframe]);
-			glCallList(list_frame);
+			glCallList(list_frame + curframe);
 			message_draw();
 			//Flip the backbuffer to the primary
 			SDL_GL_SwapBuffers();
@@ -218,20 +216,22 @@ char do_gs_cutscene()
 			{
 				case SDL_KEYUP:
 					if (event.key.keysym.sym == SDLK_ESCAPE) {
-						if (level > MAX_LEVEL)
-							retval=gs_title;
+						if (env.level > MAX_LEVEL)
+							state=gs_title;
 						else
-							retval=gs_game;
+							state=gs_game;
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
-					if (level > MAX_LEVEL)
-						retval=gs_title;
-					else
-						retval=gs_game;
+					if(event.button.button == SDL_BUTTON_LEFT){
+						if (env.level > MAX_LEVEL)
+							state=gs_title;
+						else
+							state=gs_game;
+					}
 					break;
 				case SDL_QUIT:
-					retval = gs_exit;
+					state = gs_exit;
 					break;
 				case SDL_VIDEOEXPOSE:
 					dirty = 1;
@@ -244,15 +244,15 @@ char do_gs_cutscene()
 	}
 
 	// Stop music playback, if it was playing
-	if (music) Mix_FreeMusic(music);
+	Mix_FreeMusic(music);
 
 	// Clean up OpenGL stuff for this screen
-	glDeleteLists(list_frame, 1);
+	glDeleteLists(list_frame, NUM_FRAMES);
 	glDeleteLists(list_film, 1);
 
 	glDeleteTextures( NUM_FRAMES, tex_frame );
 	glDeleteTextures( 2, tex_film );
 
-	return retval;
+	return state;
 }
 

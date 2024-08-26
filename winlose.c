@@ -1,8 +1,8 @@
 /* winlose.cpp - win and lose screens */
 #include "winlose.h"
 
-// Texture operations, and music_play
-#include "function.h"
+// Texture operations + music
+#include "common_client.h"
 
 // Externs used by this sub-section
 extern unsigned char vol_music;
@@ -21,9 +21,7 @@ static char win_lose(const char *tex_name, const char *mus_name, char current_ga
 	// Make a display list in which we draw a full-screen quad.
 	GLuint list_win = glGenLists(1);
 	glNewList(list_win, GL_COMPILE);
-	   	glBegin(GL_QUADS);
-			glBox(0,0,SCREEN_X,SCREEN_Y);
-		glEnd();
+	glBox(tex_win, SCREEN_X, SCREEN_Y);
 	glEndList();
 
 	/* This is the music to play. */
@@ -34,17 +32,17 @@ static char win_lose(const char *tex_name, const char *mus_name, char current_ga
 	// DISable alpha test: no transparency for backdrop!
 	glDisable(GL_ALPHA_TEST);
 	// bind VICTORY quad texture
-	glBindTexture(GL_TEXTURE_2D, tex_win);
+//	glBindTexture(GL_TEXTURE_2D, tex_win);
 
 	// MAIN SCREEN LOOP	-- Values used for main loop
 	//  dirty flag: redraw screen when set to 1
-	unsigned char dirty=1;
-	//  retval: when switched away from 0, exit screen
+	int dirty=1;
+	//  state: when switched away from 0, exit screen
 	//    positive value is next gamestate
 	//    negative value is gs_exit.
-	char retval = current_gamestate;
+	int state = current_gamestate;
 
-	while (retval == current_gamestate)
+	while (state == current_gamestate)
 	{
 		if (dirty)
 		{
@@ -64,10 +62,10 @@ static char win_lose(const char *tex_name, const char *mus_name, char current_ga
 			{
 				case SDL_KEYUP:
 				case SDL_MOUSEBUTTONUP:
-					retval = next_gamestate;
+					state = next_gamestate;
 					break;
 				case SDL_QUIT:
-					retval = gs_exit;
+					state = gs_exit;
 					break;
 				case SDL_VIDEOEXPOSE:
 					dirty = 1;
@@ -80,13 +78,13 @@ static char win_lose(const char *tex_name, const char *mus_name, char current_ga
 	}
 
 	// Stop music playback, if it was playing
-	if (music) Mix_FreeMusic(music);
+	Mix_FreeMusic(music);
 
 	// Clean up OpenGL stuff for this screen
 	glDeleteLists(list_win, 1);
 	glDeleteTextures( 1, &tex_win );
 
-	return retval;
+	return state;
 }
 
 char do_gs_win()

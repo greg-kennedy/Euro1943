@@ -21,6 +21,7 @@ void disconnect_player(int);
 void control_game_regular(int id, int speed, int turn, int fire_primary, int fire_secondary,
 						  int weaponswap, int enter, float aim);
 void control_game_hq(int slot, int x, int y, int type, int fire, int enter);
+void control_game_deploy(int slot, int x, int y, int fire);
 
 // Serialise game status, customized to a player
 int serialize_game(int, unsigned char *);

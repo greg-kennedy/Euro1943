@@ -193,19 +193,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\function.h"
-				>
-			</File>
-			<File
 				RelativePath=".\game.h"
 				>
 			</File>
 			<File
 				RelativePath=".\game_logic.h"
-				>
-			</File>
-			<File
-				RelativePath=".\message.h"
 				>
 			</File>
 			<File
@@ -249,11 +241,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\cutscene.c"
+				RelativePath=".\common_client.c"
 				>
 			</File>
 			<File
-				RelativePath=".\function.c"
+				RelativePath=".\cutscene.c"
 				>
 			</File>
 			<File
@@ -266,10 +258,6 @@
 			</File>
 			<File
 				RelativePath=".\main.c"
-				>
-			</File>
-			<File
-				RelativePath=".\message.c"
 				>
 			</File>
 			<File
