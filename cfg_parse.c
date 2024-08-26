@@ -12,70 +12,70 @@
 #include <errno.h>
 
 /* implementation details of (opaque) config structures */
-struct cfg_node
-{
-  char *key;
-  char *value;
+struct cfg_node {
+	char * key;
+	char * value;
 
-  struct cfg_node *next;
+	struct cfg_node * next;
 };
 
-struct cfg_struct
-{
-  struct cfg_node *head;
+struct cfg_struct {
+	struct cfg_node * head;
 };
 
 /* Helper functions
     A malloc() wrapper which handles null return values, and zeroes memory too */
-static void *cfg_malloc(const unsigned int size)
+static void * cfg_malloc(const unsigned int size)
 {
-  void *temp = malloc(size);
-  if (temp == NULL && size != 0)
-  {
-    fprintf(stderr,"CFG_PARSE ERROR: MALLOC(%u) returned NULL (errno==",size);
-    if (errno == ENOMEM)
-      fprintf(stderr, "ENOMEM");
-    else
-      fprintf(stderr, "%d, ENOMEM==%d",errno,ENOMEM);
-    fprintf(stderr,")\n");
-    exit(EXIT_FAILURE);
-  }
-  memset(temp,0,size);
-  return temp;
+	void * temp = malloc(size);
+
+	if (temp == NULL && size != 0) {
+		fprintf(stderr, "CFG_PARSE ERROR: MALLOC(%u) returned NULL (errno==", size);
+
+		if (errno == ENOMEM)
+			fprintf(stderr, "ENOMEM");
+		else
+			fprintf(stderr, "%d, ENOMEM==%d", errno, ENOMEM);
+
+		fprintf(stderr, ")\n");
+		exit(EXIT_FAILURE);
+	}
+
+	memset(temp, 0, size);
+	return temp;
 }
 
 /* Determines if a character is a whitespace (blank) character or not. */
 static char cfg_is_whitespace(const char c)
 {
-  return (c == ' ' || c == '\t' || c == '\n' || c == '\r');
+	return (c == ' ' || c == '\t' || c == '\n' || c == '\r');
 }
 
 /* Returns a duplicate of input str, without leading / trailing whitespace
     Input str *MUST* be null-terminated, or disaster will result */
-static char *cfg_trim(const char *str)
+static char * cfg_trim(const char * str)
 {
-  int temp_len;
-  char *tstr;
+	int temp_len;
+	char * tstr;
 
-  /* check for null input first */
-  if (str == NULL) return NULL;
+	/* check for null input first */
+	if (str == NULL) return NULL;
 
-  /* advance start pointer to first non-whitespace char */
-  while (cfg_is_whitespace(*str))
-    str ++;
+	/* advance start pointer to first non-whitespace char */
+	while (cfg_is_whitespace(*str))
+		str ++;
 
-  /* calculate length of output string, minus leading whitespace */
-  temp_len = strlen(str);
+	/* calculate length of output string, minus leading whitespace */
+	temp_len = strlen(str);
 
-  /* roll back length until we run out of whitespace */
-  while (temp_len > 0 && cfg_is_whitespace(str[temp_len-1]))
-    temp_len --;
+	/* roll back length until we run out of whitespace */
+	while (temp_len > 0 && cfg_is_whitespace(str[temp_len - 1]))
+		temp_len --;
 
-  /* copy portion of string to new string */
-  tstr = (char *)cfg_malloc(temp_len + 1);
-  memcpy(tstr,str,temp_len);
-
-  return tstr;
+	/* copy portion of string to new string */
+	tstr = (char *)cfg_malloc(temp_len + 1);
+	memcpy(tstr, str, temp_len);
+	return tstr;
 }
 
 /**
@@ -88,40 +88,39 @@ static char *cfg_trim(const char *str)
  * @param filename String containing filename to open and parse.
  * @return EXIT_SUCCESS (0) on success, or EXIT_FAILURE if file could not be opened.
  */
-int cfg_load(struct cfg_struct *cfg, const char *filename)
+int cfg_load(struct cfg_struct * cfg, const char * filename)
 {
-  FILE *fp;
-  char buffer[CFG_MAX_LINE], *delim;
+	FILE * fp;
+	char buffer[CFG_MAX_LINE], * delim;
 
-  /* safety check: null input */
-  if (cfg == NULL || filename == NULL) return EXIT_FAILURE;
+	/* safety check: null input */
+	if (cfg == NULL || filename == NULL) return EXIT_FAILURE;
 
-  /* open file for reading */
-  fp = fopen(filename, "r");
-  if (fp == NULL) return EXIT_FAILURE;
+	/* open file for reading */
+	fp = fopen(filename, "r");
 
-  while (!feof(fp))
-  {
-    if (fgets(buffer,CFG_MAX_LINE,fp) != NULL)
-    {
-      /* locate first # sign and terminate string there (comment) */
-      delim = strchr(buffer, '#');
-      if (delim != NULL) *delim = '\0';
+	if (fp == NULL) return EXIT_FAILURE;
 
-      /* locate first = sign and prepare to split */
-      delim = strchr(buffer, '=');
-      if (delim != NULL)
-      {
-        *delim = '\0';
-        delim ++;
+	while (!feof(fp)) {
+		if (fgets(buffer, CFG_MAX_LINE, fp) != NULL) {
+			/* locate first # sign and terminate string there (comment) */
+			delim = strchr(buffer, '#');
 
-        cfg_set(cfg,buffer,delim);
-      }
-    }
-  }
+			if (delim != NULL) *delim = '\0';
 
-  fclose(fp);
-  return EXIT_SUCCESS;
+			/* locate first = sign and prepare to split */
+			delim = strchr(buffer, '=');
+
+			if (delim != NULL) {
+				*delim = '\0';
+				delim ++;
+				cfg_set(cfg, buffer, delim);
+			}
+		}
+	}
+
+	fclose(fp);
+	return EXIT_SUCCESS;
 }
 
 /**
@@ -131,32 +130,34 @@ int cfg_load(struct cfg_struct *cfg, const char *filename)
  * @param filename String containing filename to open and parse.
  * @return EXIT_SUCCESS (0) on success, or EXIT_FAILURE if file could not be opened or a write error occurred.
  */
-int cfg_save(const struct cfg_struct *cfg, const char *filename)
+int cfg_save(const struct cfg_struct * cfg, const char * filename)
 {
-  FILE *fp;
-  struct cfg_node *temp;
+	FILE * fp;
+	struct cfg_node * temp;
 
-  /* safety check: null input */
-  if (cfg == NULL || filename == NULL) return EXIT_FAILURE;
+	/* safety check: null input */
+	if (cfg == NULL || filename == NULL) return EXIT_FAILURE;
 
-  /* open output file for writing */
-  fp = fopen(filename, "w");
-  if (fp == NULL) return EXIT_FAILURE;
+	/* open output file for writing */
+	fp = fopen(filename, "w");
 
-  /* point at first item in list */
-  temp = cfg->head;
+	if (fp == NULL) return EXIT_FAILURE;
 
-  /* step through the list, dumping each key-value pair to disk */
-  while (temp != NULL)
-  {
-    if (fprintf(fp,"%s=%s\n",temp->key,temp->value) < 0) { 
-      fclose(fp);
-      return EXIT_FAILURE;
-    }
-    temp = temp->next;
-  }
-  fclose(fp);
-  return EXIT_SUCCESS;
+	/* point at first item in list */
+	temp = cfg->head;
+
+	/* step through the list, dumping each key-value pair to disk */
+	while (temp != NULL) {
+		if (fprintf(fp, "%s=%s\n", temp->key, temp->value) < 0) {
+			fclose(fp);
+			return EXIT_FAILURE;
+		}
+
+		temp = temp->next;
+	}
+
+	fclose(fp);
+	return EXIT_SUCCESS;
 }
 
 /**
@@ -165,41 +166,44 @@ int cfg_save(const struct cfg_struct *cfg, const char *filename)
  * @param key String containing key to search for.
  * @return String containing associated value, or NULL if key was not found.
  */
-const char * cfg_get(const struct cfg_struct *cfg, const char *key)
+const char * cfg_get(const struct cfg_struct * cfg, const char * key)
 {
-  unsigned int i, len;
-  char *tkey;
-  struct cfg_node *temp;
+	unsigned int i, len;
+	char * tkey;
+	struct cfg_node * temp;
 
-  /* safety check: null input */
-  if (cfg == NULL || key == NULL) return NULL;
+	/* safety check: null input */
+	if (cfg == NULL || key == NULL) return NULL;
 
-  /* Trim input search key */
-  tkey = cfg_trim(key);
+	/* Trim input search key */
+	tkey = cfg_trim(key);
 
-  /* Exclude empty key */
-  if (! strcmp(tkey,"")) { free(tkey); return NULL; }
+	/* Exclude empty key */
+	if (! strcmp(tkey, "")) {
+		free(tkey);
+		return NULL;
+	}
 
-  /* Lowercase key */
-  len = strlen(tkey);
-  for (i = 0; i < len; i++)
-    tkey[i] = tolower(tkey[i]);
+	/* Lowercase key */
+	len = strlen(tkey);
 
-  /* set up pointer to start of list */
-  temp = cfg->head;
+	for (i = 0; i < len; i++)
+		tkey[i] = tolower(tkey[i]);
 
-  while (temp != NULL)
-  {
-    if (! strcmp(tkey, temp->key))
-    {
-      free(tkey);
-      return temp->value;
-    }
-    temp = temp->next;
-  }
+	/* set up pointer to start of list */
+	temp = cfg->head;
 
-  free(tkey);
-  return NULL;
+	while (temp != NULL) {
+		if (! strcmp(tkey, temp->key)) {
+			free(tkey);
+			return temp->value;
+		}
+
+		temp = temp->next;
+	}
+
+	free(tkey);
+	return NULL;
 }
 
 /**
@@ -212,61 +216,60 @@ const char * cfg_get(const struct cfg_struct *cfg, const char *key)
  * @param key String containing key to search for.
  * @param value String containing new value to assign to key.
  */
-void cfg_set(struct cfg_struct *cfg, const char *key, const char *value)
+void cfg_set(struct cfg_struct * cfg, const char * key, const char * value)
 {
-  unsigned int i, len;
-  char *tkey, *tvalue;
-  struct cfg_node *temp;
+	unsigned int i, len;
+	char * tkey, * tvalue;
+	struct cfg_node * temp;
 
-  /* safety check: null input */
-  if (cfg == NULL || key == NULL || value == NULL) return;
+	/* safety check: null input */
+	if (cfg == NULL || key == NULL || value == NULL) return;
 
-  /* Trim key. */
-  tkey = cfg_trim(key);
-  /* Exclude empty key */
-  if (! strcmp(tkey,"")) { free(tkey); return; }
+	/* Trim key. */
+	tkey = cfg_trim(key);
 
-  /* Lowercase key */
-  len = strlen(tkey);
-  for (i = 0; i < len; i++)
-    tkey[i] = tolower(tkey[i]);
+	/* Exclude empty key */
+	if (! strcmp(tkey, "")) {
+		free(tkey);
+		return;
+	}
 
-  /* Trim value. */
-  tvalue = cfg_trim(value);
+	/* Lowercase key */
+	len = strlen(tkey);
 
-  /* Depending on implementation, you may wish to treat blank value
-     as a "delete" operation */
-  /* if (! strcmp(tvalue,"")) { free(tvalue); cfg_delete(cfg,tkey); free(tkey); return; } */
+	for (i = 0; i < len; i++)
+		tkey[i] = tolower(tkey[i]);
 
-  /* point at first item in list */
-  temp = cfg->head;
+	/* Trim value. */
+	tvalue = cfg_trim(value);
+	/* Depending on implementation, you may wish to treat blank value
+	   as a "delete" operation */
+	/* if (! strcmp(tvalue,"")) { free(tvalue); cfg_delete(cfg,tkey); free(tkey); return; } */
+	/* point at first item in list */
+	temp = cfg->head;
 
-  /* search list for existing key */
-  while (temp != NULL)
-  {
-    if (! strcmp(tkey, temp->key))
-    {
-      /* found a match: no longer need temp key */
-      free(tkey);
+	/* search list for existing key */
+	while (temp != NULL) {
+		if (! strcmp(tkey, temp->key)) {
+			/* found a match: no longer need temp key */
+			free(tkey);
+			/* update value */
+			free(temp->value);
+			temp->value = tvalue;
+			return;
+		}
 
-      /* update value */
-      free(temp->value);
-      temp->value = tvalue;
-      return;
-    }
-    temp = temp->next;
-  }
+		temp = temp->next;
+	}
 
-  /* not found: create new element */
-  temp = (struct cfg_node *)cfg_malloc(sizeof(struct cfg_node));
-
-  /* assign key, value */
-  temp->key = tkey;
-  temp->value = tvalue;
-
-  /* prepend */
-  temp->next = cfg->head;
-  cfg->head = temp;
+	/* not found: create new element */
+	temp = (struct cfg_node *)cfg_malloc(sizeof(struct cfg_node));
+	/* assign key, value */
+	temp->key = tkey;
+	temp->value = tvalue;
+	/* prepend */
+	temp->next = cfg->head;
+	cfg->head = temp;
 }
 
 /**
@@ -275,60 +278,61 @@ void cfg_set(struct cfg_struct *cfg, const char *key, const char *value)
  * @param cfg Pointer to cfg_struct to search.
  * @param key String containing key to search for.
  */
-void cfg_delete(struct cfg_struct *cfg, const char *key)
+void cfg_delete(struct cfg_struct * cfg, const char * key)
 {
-  unsigned int i, len;
-  char *tkey;
-  struct cfg_node *temp, *temp2 = NULL;
+	unsigned int i, len;
+	char * tkey;
+	struct cfg_node * temp, * temp2 = NULL;
 
-  /* safety check: null input */
-  if (cfg == NULL || key == NULL) return;
+	/* safety check: null input */
+	if (cfg == NULL || key == NULL) return;
 
-  /* trim input key */
-  tkey = cfg_trim(key);
-  /* Exclude empty key */
-  if (! strcmp(tkey,"")) { free(tkey); return; }
+	/* trim input key */
+	tkey = cfg_trim(key);
 
-  /* Lowercase key */
-  len = strlen(tkey);
-  for (i = 0; i < len; i++)
-    tkey[i] = tolower(tkey[i]);
+	/* Exclude empty key */
+	if (! strcmp(tkey, "")) {
+		free(tkey);
+		return;
+	}
 
-  /* set pointer to start of list */
-  temp = cfg->head;
+	/* Lowercase key */
+	len = strlen(tkey);
 
-  /* search list for existing key */
-  while (temp != NULL)
-  {
-    if (! strcmp(tkey, temp->key))
-    {
-      /* cleanup trimmed key */
-      free(tkey);
+	for (i = 0; i < len; i++)
+		tkey[i] = tolower(tkey[i]);
 
-      if (temp == cfg->head)
-      {
-        /* first element */
-        cfg->head = temp->next;
-      } else {
-        /* splice out element */
-        temp2->next = temp->next;
-      }
+	/* set pointer to start of list */
+	temp = cfg->head;
 
-      /* delete element */
-      free(temp->value);
-      free(temp->key);
-      free(temp);
+	/* search list for existing key */
+	while (temp != NULL) {
+		if (! strcmp(tkey, temp->key)) {
+			/* cleanup trimmed key */
+			free(tkey);
 
-      return;
-    }
+			if (temp == cfg->head) {
+				/* first element */
+				cfg->head = temp->next;
+			} else {
+				/* splice out element */
+				temp2->next = temp->next;
+			}
 
-    temp2 = temp;
-    temp = temp->next;
-  }
+			/* delete element */
+			free(temp->value);
+			free(temp->key);
+			free(temp);
+			return;
+		}
 
-  /* not found */
-  /* cleanup trimmed key */
-  free(tkey);
+		temp2 = temp;
+		temp = temp->next;
+	}
+
+	/* not found */
+	/* cleanup trimmed key */
+	free(tkey);
 }
 
 /**
@@ -338,10 +342,10 @@ void cfg_delete(struct cfg_struct *cfg, const char *key)
  */
 struct cfg_struct * cfg_init()
 {
-  struct cfg_struct *temp;
-  temp = (struct cfg_struct *)cfg_malloc(sizeof(struct cfg_struct));
-  temp->head = NULL;
-  return temp;
+	struct cfg_struct * temp;
+	temp = (struct cfg_struct *)cfg_malloc(sizeof(struct cfg_struct));
+	temp->head = NULL;
+	return temp;
 }
 
 /**
@@ -349,17 +353,18 @@ struct cfg_struct * cfg_init()
  * previously held by the structure.
  * @param cfg Pointer to cfg_struct to delete.
  */
-void cfg_free(struct cfg_struct *cfg)
+void cfg_free(struct cfg_struct * cfg)
 {
-  struct cfg_node *temp = NULL, *temp2;
-  temp = cfg->head;
-  while (temp != NULL)
-  {
-    temp2 = temp->next;
-    free(temp->key);
-    free(temp->value);
-    free(temp);
-    temp = temp2;
-  }
-  free (cfg);
+	struct cfg_node * temp = NULL, * temp2;
+	temp = cfg->head;
+
+	while (temp != NULL) {
+		temp2 = temp->next;
+		free(temp->key);
+		free(temp->value);
+		free(temp);
+		temp = temp2;
+	}
+
+	free(cfg);
 }

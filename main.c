@@ -43,10 +43,9 @@ static const char * to_string(int i)
 }
 
 /* ************************************************************************ */
-static struct cfg_struct *cfg_setup(const char * filename)
+static struct cfg_struct * cfg_setup(const char * filename)
 {
 	struct cfg_struct * c = cfg_init();
-
 	// Specifying some defaults
 	cfg_set(c, "VIDEO_WIDTH", "800");
 	cfg_set(c, "VIDEO_HEIGHT", "600");
@@ -90,7 +89,6 @@ static int init_sdl()
 	SDL_EventState(SDL_VIDEORESIZE, SDL_IGNORE);
 	SDL_EventState(SDL_SYSWMEVENT, SDL_IGNORE);
 	SDL_EventState(SDL_USEREVENT, SDL_IGNORE);
-
 	return 1;
 }
 
@@ -151,8 +149,7 @@ static int init_video(const struct cfg_struct * cfg)
 	SDL_GL_SetAttribute(SDL_GL_SWAP_CONTROL, vsync);	// vsync
 
 	// Create the SDL surface window.
-	if (! SDL_SetVideoMode(w, h, bpp, SDL_OPENGL | (f ? SDL_FULLSCREEN : 0)))
-	{
+	if (! SDL_SetVideoMode(w, h, bpp, SDL_OPENGL | (f ? SDL_FULLSCREEN : 0))) {
 		fprintf(stderr, "Unable to set video mode: %s\n", SDL_GetError());
 		return 0;
 	}
@@ -160,7 +157,6 @@ static int init_video(const struct cfg_struct * cfg)
 	// Set window caption and turn off display cursor.
 	SDL_WM_SetCaption("Euro1943", NULL);
 	SDL_ShowCursor(SDL_DISABLE);
-
 	// Set up orthographic viewport.  Lock ourselves at 800x600.
 	glViewport(0, 0, w, h);
 	glMatrixMode(GL_PROJECTION);
@@ -181,7 +177,6 @@ static int init_video(const struct cfg_struct * cfg)
 	//glDisable(GL_CULL_FACE);
 //	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
 	// ///////////////////
 	// print some OpenGL info
 	int GLTexSize;
@@ -200,6 +195,7 @@ static int init_video(const struct cfg_struct * cfg)
 		fprintf(stderr, "IMG_Init: Failed to init required png support: %s\n", IMG_GetError());
 		return 0;
 	}
+
 	return 1;
 }
 
@@ -233,17 +229,14 @@ static void init_audio(const struct cfg_struct * cfg)
 			env.volume = atoi(cfg_get(cfg, "AUDIO_VOLUME"));
 			Mix_Volume(-1, env.volume);
 			Mix_VolumeMusic(env.volume);
-
 			// we have WAV support at least
 			env.ok_audio = 1;
-
 			// get and print the audio format in use
 			int numtimesopened;
 			numtimesopened = Mix_QuerySpec(&frequency, &format, &output_channels);
 
 			if (!numtimesopened)
 				fprintf(stderr, "Mix_QuerySpec: %s\n", Mix_GetError());
-
 			else {
 				mixer_channels = Mix_AllocateChannels(-1);
 				const char * format_str = "Unknown";
@@ -289,7 +282,6 @@ static void init_network(const struct cfg_struct * cfg)
 	if (SDLNet_Init() < 0) {
 		fprintf(stderr, "SDLNet_Init: %s\n", SDLNet_GetError());
 		env.ok_network = 0;
-
 		// Read OverServer values from cfg file
 		strncpy(env.OS_LOC, cfg_get(cfg, "OVERSERVER_HOST"), 80);
 		env.OS_PORT = atoi(cfg_get(cfg, "OVERSERVER_PORT"));
@@ -301,7 +293,6 @@ int main(int argc, char * argv[])
 {
 	// boilerplate startup message
 	printf("Euro1943 - v%s\nGreg Kennedy 2013\n\n", VERSION);
-
 	///////////////////////
 	// .ini file configuration
 	struct cfg_struct * cfg = cfg_setup("config.ini");
@@ -314,17 +305,13 @@ int main(int argc, char * argv[])
 			// Init optional items.  If these fail, we can still play the game.
 			init_audio(cfg);
 			init_network(cfg);
-
 			init_common();
-
 			srand((unsigned int)time(NULL));
-
 			// Defines - help to prettify the main loop.
 			//#define state_func(X) isDone = do_ ## X ();
-		#define switch_state(X) case X: \
+#define switch_state(X) case X: \
 			gamestate = do_ ## X (); \
 			break;
-
 			// Holds current gamestate.  Change this from within a subsystem, and
 			//  the current sub-state will shut down, while the next will start.
 			int gamestate = gs_title;
@@ -348,18 +335,20 @@ int main(int argc, char * argv[])
 			quit_common();
 
 			if (env.ok_network) SDLNet_Quit();
+
 			if (env.ok_audio) Mix_CloseAudio();
+
 			if (env.ok_music) Mix_Quit();
 		}
+
 		SDL_ShowCursor(SDL_ENABLE);
 		IMG_Quit();
-
 		SDL_Quit();
 	}
+
 	// Dump cfg-struct to disk.
 	cfg_save(cfg, "config.ini");
 	// All done, clean up.
 	cfg_free(cfg);
-
 	return 0;
 }

@@ -18,4 +18,4 @@
 
 #include <SDL/SDL_net.h>
 
-unsigned int GetMetaserverBlock (char *ip, int port, unsigned char type, int blocknum, IPaddress **iplist);
+unsigned int GetMetaserverBlock(char * ip, int port, unsigned char type, int blocknum, IPaddress ** iplist);

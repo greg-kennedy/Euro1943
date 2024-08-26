@@ -19,7 +19,7 @@ void disconnect_player(int);
 
 // Supply user controls to an ID
 void control_game_regular(int id, int speed, int turn, int fire_primary, int fire_secondary,
-						  int weaponswap, int enter, float aim);
+	int weaponswap, int enter, float aim);
 void control_game_hq(int slot, int x, int y, int type, int fire, int enter);
 void control_game_deploy(int slot, int x, int y, int fire);
 

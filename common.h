@@ -1,6 +1,6 @@
 /* EURO1943 - GREG KENNEDY
 	http://greg-kennedy.com */
-	
+
 /* common.h - Declarations common to both Client and Server go here.
 	 This file should be consistent between both (per version), and if something
 	 differs, it probably won't work right. */

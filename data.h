@@ -15,6 +15,7 @@
 static struct {
 	int w, h;
 } building_size[] = {
+
 	{ 64, 64 },	// capture point
 	{ 128, 128 },	// hq
 	{ 128, 128 },
@@ -37,6 +38,7 @@ static struct {
 static struct {
 	unsigned char speed, life, flags;
 } projectile_detail[] = {
+
 	{ 150, 3, 0 },		// pistol and smg bullet
 	{ 100, 4, TRAIL | EXPLOSIVE },		// rocket
 	{ 200, 3, 0 },		// sniper round
@@ -138,25 +140,25 @@ struct object_base {
 
 // JEEP
 //  jeep seats
-								// spr, off_x,y, ctr_x,y,scale, rot, proj,cool, seat, m, flags, sub, next
-static const struct object_sub jeep_r = { -1, -7, 13, 0,0,1,    0, -1,-1,       1, -1, SEAT_IMG, NULL, NULL };
-static const struct object_sub jeep_l = { -1, -7, -13, 0,0,1,   0, -1,-1,       0, -1, SEAT_IMG, NULL, & jeep_r };
-static const struct object_sub jeep_body = { 9, 0,0, 0,0,1,     0, -1,-1,      -1, -1, SEAT_IMG, &jeep_l, NULL };
-										// type, zoom, spd,accel,rot, hp,  k,  w, h, flags, sub, next
-static const struct object_base jeep = { 1, 1, 30,5,M_PI/16,100, 0, 64, 96, 0, & jeep_body, NULL };
+// spr, off_x,y, ctr_x,y,scale, rot, proj,cool, seat, m, flags, sub, next
+static const struct object_sub jeep_r = { -1, -7, 13, 0, 0, 1,    0, -1, -1,       1, -1, SEAT_IMG, NULL, NULL };
+static const struct object_sub jeep_l = { -1, -7, -13, 0, 0, 1,   0, -1, -1,       0, -1, SEAT_IMG, NULL, & jeep_r };
+static const struct object_sub jeep_body = { 9, 0, 0, 0, 0, 1,     0, -1, -1,      -1, -1, SEAT_IMG, &jeep_l, NULL };
+// type, zoom, spd,accel,rot, hp,  k,  w, h, flags, sub, next
+static const struct object_base jeep = { 1, 1, 30, 5, M_PI / 16, 100, 0, 64, 96, 0, & jeep_body, NULL };
 
 
 // HUMAN
 //  torso
 //  there is a whole array of them for weapon swaps
-													// spr, off_x,y, ctr_x,y,scale, rot, proj,cool, seat, m, flags, sub, next
-static const struct object_sub human_torso_unarmed   = { 2, 0,0, 0,0,1.0, M_TAU, -1, 0, 0, 0, 0, NULL, NULL };
-static const struct object_sub human_torso_pistol    = { 3, 0,0, 0,0,1.0, M_TAU,  0, 4, 0, 0, 0, NULL, NULL };
-static const struct object_sub human_torso_rocket    = { 4, 0,0, 0,0,1.0, M_TAU,  1, 10, 0, 0, 0, NULL, NULL };
-static const struct object_sub human_torso_sniper    = { 5, 0,0, 0,0,1.0, M_TAU,  2, 10, 0, 0, 0, NULL, NULL };
-static const struct object_sub human_torso_smg       = { 6, 0,0, 0,0,1.0, M_TAU,  0, 1, 0, 0, 0, NULL, NULL };
-static const struct object_sub human_torso_explosive = { 7, 0,0, 0,0,1.0, M_TAU,  4, 10, 0, 0, 0, NULL, NULL };
-static const struct object_sub human_torso_backpack  = { 8, 0,0, 0,0,1.0, M_TAU,  5, 10, 0, 0, 0, NULL, NULL };
+// spr, off_x,y, ctr_x,y,scale, rot, proj,cool, seat, m, flags, sub, next
+static const struct object_sub human_torso_unarmed   = { 2, 0, 0, 0, 0, 1.0, M_TAU, -1, 0, 0, 0, 0, NULL, NULL };
+static const struct object_sub human_torso_pistol    = { 3, 0, 0, 0, 0, 1.0, M_TAU,  0, 4, 0, 0, 0, NULL, NULL };
+static const struct object_sub human_torso_rocket    = { 4, 0, 0, 0, 0, 1.0, M_TAU,  1, 10, 0, 0, 0, NULL, NULL };
+static const struct object_sub human_torso_sniper    = { 5, 0, 0, 0, 0, 1.0, M_TAU,  2, 10, 0, 0, 0, NULL, NULL };
+static const struct object_sub human_torso_smg       = { 6, 0, 0, 0, 0, 1.0, M_TAU,  0, 1, 0, 0, 0, NULL, NULL };
+static const struct object_sub human_torso_explosive = { 7, 0, 0, 0, 0, 1.0, M_TAU,  4, 10, 0, 0, 0, NULL, NULL };
+static const struct object_sub human_torso_backpack  = { 8, 0, 0, 0, 0, 1.0, M_TAU,  5, 10, 0, 0, 0, NULL, NULL };
 
 const struct object_sub * const human_torso[] = {
 	& human_torso_unarmed,
@@ -168,11 +170,11 @@ const struct object_sub * const human_torso[] = {
 	& human_torso_backpack
 };
 
-											// spr, off_x,y, ctr_x,y,scale, rot, proj,cool, seat, m, flags, sub, next
-static const struct object_sub human_body = { 0,       0,0,    0,0,1.0,       0, -1,0,       -1, -1, ANIMATED, & human_torso_smg, NULL };
+// spr, off_x,y, ctr_x,y,scale, rot, proj,cool, seat, m, flags, sub, next
+static const struct object_sub human_body = { 0,       0, 0,    0, 0, 1.0,       0, -1, 0,       -1, -1, ANIMATED, & human_torso_smg, NULL };
 
-										// type, zoom, spd,accel,rot,    hp,  k, w,  h,  flags, sub, next
-static const struct object_base human = {   0,    1,   5,  5,    M_PI/8, 100, 0, 32, 32, HUMAN, & human_body, & jeep };
+// type, zoom, spd,accel,rot,    hp,  k, w,  h,  flags, sub, next
+static const struct object_base human = {   0,    1,   5,  5,    M_PI / 8, 100, 0, 32, 32, HUMAN, & human_body, & jeep };
 
 /*
 // LIGHT TANK

@@ -23,8 +23,7 @@ static char msg_line[3][MSG_LINE_LEN];
 static int msg_speaker;
 
 // FONT
-static const unsigned char bmp_font[96][8] =
-{
+static const unsigned char bmp_font[96][8] = {
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, //U+0020( )
 	{ 0x00, 0x18, 0x00, 0x18, 0x18, 0x3c, 0x3c, 0x18 }, //U+0021(!)
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6c, 0x6c }, //U+0022(")
@@ -126,13 +125,13 @@ static const unsigned char bmp_font[96][8] =
 // Font display list
 static GLuint list_font;
 
-void init_common() {
+void init_common()
+{
 	// ///////////////////
 	// Load basic (globally shared) resources.
 	// Set up mouse cursor: load cursor texture first.
 	// Mouse cursor texture
 	tex_cursor = load_texture("img/ui/cursor.png", GL_LINEAR, GL_LINEAR);
-
 	// Make a display list for the mouse cursor.
 	list_cursor = glGenLists(1);
 	glNewList(list_cursor, GL_COMPILE);
@@ -142,42 +141,39 @@ void init_common() {
 	// assume pushmatrix before every cursor draw!
 	glPopMatrix();
 	glEndList();
-
 	// Load font
 	// Make one display list for each character.
 	list_font = glGenLists(96);
-	for (unsigned char i=0; i < 96; i++)
-	{
+
+	for (unsigned char i = 0; i < 96; i++) {
 		glNewList(list_font + i, GL_COMPILE);
-			glBitmap(8,8,0,0,8,0,bmp_font[i]);
+		glBitmap(8, 8, 0, 0, 8, 0, bmp_font[i]);
 		glEndList();
 	}
 
-	tex_bubble = load_texture("img/hud/bubble.png",GL_NEAREST,GL_NEAREST);
+	tex_bubble = load_texture("img/hud/bubble.png", GL_NEAREST, GL_NEAREST);
 
 	// Speaker icons
-	for (unsigned char i=0; i<NUM_SPEAKERS; i++)
-	{
+	for (unsigned char i = 0; i < NUM_SPEAKERS; i++) {
 		char buffer[64];
-		sprintf(buffer,"img/hud/speakers/%d.png",i);
-		tex_speaker[i] = load_texture(buffer,GL_LINEAR, GL_LINEAR);
+		sprintf(buffer, "img/hud/speakers/%d.png", i);
+		tex_speaker[i] = load_texture(buffer, GL_LINEAR, GL_LINEAR);
 	}
 
 	// one for the speech bubble
 	list_bubble = glGenLists(1);
 	glNewList(list_bubble, GL_COMPILE);
-		// ENable alpha test: yes to transparency for speech bubble / speaker icon
-		glEnable(GL_ALPHA_TEST);
-		glBoxPos(tex_bubble, 512, 32, 0, 284);
-/*		glBegin(GL_QUADS);
-			glBox(144,SCREEN_Y-32,SCREEN_X-288,32);
-		glEnd(); */
+	// ENable alpha test: yes to transparency for speech bubble / speaker icon
+	glEnable(GL_ALPHA_TEST);
+	glBoxPos(tex_bubble, 512, 32, 0, 284);
+	/*		glBegin(GL_QUADS);
+				glBox(144,SCREEN_Y-32,SCREEN_X-288,32);
+			glEnd(); */
 	glEndList();
-
 	// one for each speaker
 	list_speaker = glGenLists(NUM_SPEAKERS);
-	for (int i=0; i<NUM_SPEAKERS; i++)
-	{
+
+	for (int i = 0; i < NUM_SPEAKERS; i++) {
 		glNewList(list_speaker + i, GL_COMPILE);
 		glBoxPos(tex_speaker[i], 32, 32, -240, 284);
 		glEndList();
@@ -188,32 +184,30 @@ void quit_common()
 {
 	glDeleteLists(list_speaker, NUM_SPEAKERS);
 	glDeleteLists(list_bubble, 1);
-
-	glDeleteTextures( NUM_SPEAKERS, tex_speaker );
-	glDeleteTextures( 1, &tex_bubble );
-
+	glDeleteTextures(NUM_SPEAKERS, tex_speaker);
+	glDeleteTextures(1, &tex_bubble);
 	// Delete font.
 	glDeleteLists(list_font, 96);
-
 	glDeleteLists(list_cursor, 1);
 	glDeleteTextures(1, &tex_cursor);
 }
 
 ///////////////
 
-static int powerOfTwo( int value )
+static int powerOfTwo(int value)
 {
 	int result = 1 ;
-	while ( result < value )
+
+	while (result < value)
 		result *= 2;
-	return result ;		
+
+	return result ;
 }
 
 // helper function: draw a string anywhere
-void glPrint(GLshort x, GLshort y, const char *text)
+void glPrint(GLshort x, GLshort y, const char * text)
 {
-	glRasterPos2s(x - 400,y - 300);
-
+	glRasterPos2s(x - 400, y - 300);
 	glPushAttrib(GL_LIST_BIT);			  // Pushes The Display List Bits	 ( NEW )
 	glListBase(list_font - 32);				  // Sets The Base Character to 32	( NEW )
 	glCallLists(strlen(text), GL_UNSIGNED_BYTE, text);  // Draws The Display List Text  ( NEW )
@@ -239,155 +233,166 @@ void glBoxPos(GLuint texture, GLushort w, GLushort h, GLshort x, GLshort y)
 	glBindTexture(GL_TEXTURE_2D, texture);
 	// draw a quad centered around 0,0
 	glBegin(GL_QUADS);
-		glTexCoord2s(0, 0);
-		glVertex2f(x - w/2.0f, y - h/2.0f);
-		glTexCoord2s(1, 0);
-		glVertex2f(x + w / 2.0f, y - h / 2.0f);
-		glTexCoord2s(1, 1);
-		glVertex2f(x + w/2.0f, y + h/2.0f);
-		glTexCoord2s(0, 1);
-		glVertex2f(x - w/2.0f, y + h/2.0f);
+	glTexCoord2s(0, 0);
+	glVertex2f(x - w / 2.0f, y - h / 2.0f);
+	glTexCoord2s(1, 0);
+	glVertex2f(x + w / 2.0f, y - h / 2.0f);
+	glTexCoord2s(1, 1);
+	glVertex2f(x + w / 2.0f, y + h / 2.0f);
+	glTexCoord2s(0, 1);
+	glVertex2f(x - w / 2.0f, y + h / 2.0f);
 	glEnd();
 }
 
 // Loads a texture
-GLuint load_texture(const char *fname, GLuint min_filt, GLuint max_filt)
+GLuint load_texture(const char * fname, GLuint min_filt, GLuint max_filt)
 {
-	return load_texture_extra(fname,min_filt,max_filt,NULL,NULL);
+	return load_texture_extra(fname, min_filt, max_filt, NULL, NULL);
 }
 
 // Loads a texture, but returns the texture size in orig_w / orig_h
-GLuint load_texture_extra(const char *fname, GLuint min_filt, GLuint max_filt, int *orig_w, int *orig_h)
+GLuint load_texture_extra(const char * fname, GLuint min_filt, GLuint max_filt, int * orig_w, int * orig_h)
 {
-	int w,h;
+	int w, h;
 	GLuint tex = 0;
+	SDL_Surface * temp_surf = NULL;
+	SDL_Surface * file_surf = IMG_Load(fname);
 
-	SDL_Surface *temp_surf = NULL;
-	SDL_Surface *file_surf = IMG_Load(fname);
-	if (file_surf == NULL) { printf("Error loading texture '%s': %s\n",fname,IMG_GetError()); return 0; }
+	if (file_surf == NULL) {
+		printf("Error loading texture '%s': %s\n", fname, IMG_GetError());
+		return 0;
+	}
 
 	if (orig_w)
 		*orig_w = file_surf->w;
+
 	if (orig_h)
 		*orig_h = file_surf->h;
 
 	w = powerOfTwo(file_surf->w);
 	h = powerOfTwo(file_surf->h);
+
 	if (file_surf->flags & (SDL_SRCALPHA | SDL_SRCCOLORKEY)) {
 		// Loaded file has a transparent color?
-		temp_surf = SDL_CreateRGBSurface( SDL_SWSURFACE, w, h, 32 /* bits */,
+		temp_surf = SDL_CreateRGBSurface(SDL_SWSURFACE, w, h, 32 /* bits */,
 #if SDL_BYTEORDER == SDL_LIL_ENDIAN // OpenGL RGBA masks
-				0x000000FF,
-				0x0000FF00,
-				0x00FF0000,
-				0xFF000000
+			0x000000FF,
+			0x0000FF00,
+			0x00FF0000,
+			0xFF000000
 #else
-				0xFF000000,
-				0x00FF0000,
-				0x0000FF00,
-				0x000000FF
+			0xFF000000,
+			0x00FF0000,
+			0x0000FF00,
+			0x000000FF
 #endif
-				) ;
-		if (temp_surf == NULL) { printf("Error creating 32bit surface for '%s': %s\n",fname,SDL_GetError()); free(file_surf); return 0; }
+			) ;
+
+		if (temp_surf == NULL) {
+			printf("Error creating 32bit surface for '%s': %s\n", fname, SDL_GetError());
+			free(file_surf);
+			return 0;
+		}
+
 		// clear the dest surface
-		SDL_FillRect( temp_surf, 0, SDL_MapRGBA(temp_surf->format,0,0,0,0) ) ;
-		SDL_SetAlpha(file_surf,0,0);
-		SDL_BlitSurface(file_surf,NULL,temp_surf,NULL);
+		SDL_FillRect(temp_surf, 0, SDL_MapRGBA(temp_surf->format, 0, 0, 0, 0)) ;
+		SDL_SetAlpha(file_surf, 0, 0);
+		SDL_BlitSurface(file_surf, NULL, temp_surf, NULL);
 		SDL_FreeSurface(file_surf);
-
-		glGenTextures( 1, &tex );
-		glBindTexture( GL_TEXTURE_2D, tex );
-
+		glGenTextures(1, &tex);
+		glBindTexture(GL_TEXTURE_2D, tex);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, temp_surf->pixels);
 		SDL_FreeSurface(temp_surf);
 	} else {
 		// Loaded file does not have transparent areas.
-		temp_surf = SDL_CreateRGBSurface( SDL_SWSURFACE, w, h, 24 /* bits */,
+		temp_surf = SDL_CreateRGBSurface(SDL_SWSURFACE, w, h, 24 /* bits */,
 #if SDL_BYTEORDER == SDL_LIL_ENDIAN // OpenGL RGBA masks
-				0x000000FF,
-				0x0000FF00,
-				0x00FF0000,
-				0x00000000
+			0x000000FF,
+			0x0000FF00,
+			0x00FF0000,
+			0x00000000
 #else
-				0x00FF0000,
-				0x0000FF00,
-				0x000000FF,
-				0x00000000
+			0x00FF0000,
+			0x0000FF00,
+			0x000000FF,
+			0x00000000
 #endif
-				) ;
-		if (temp_surf == NULL) { printf("Error creating 24bit surface for '%s': %s\n",fname,SDL_GetError()); free(file_surf); return 0; }
-		SDL_BlitSurface(file_surf,NULL,temp_surf,NULL);
+			) ;
+
+		if (temp_surf == NULL) {
+			printf("Error creating 24bit surface for '%s': %s\n", fname, SDL_GetError());
+			free(file_surf);
+			return 0;
+		}
+
+		SDL_BlitSurface(file_surf, NULL, temp_surf, NULL);
 		SDL_FreeSurface(file_surf);
-
-		glGenTextures( 1, &tex );
-		glBindTexture( GL_TEXTURE_2D, tex );
-
+		glGenTextures(1, &tex);
+		glBindTexture(GL_TEXTURE_2D, tex);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, temp_surf->pixels);
 		SDL_FreeSurface(temp_surf);
 	}
 
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP ) ;
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP ) ;
-
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP) ;
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP) ;
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_filt);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, max_filt);
-
 	return tex;
 }
 
 void message_clear()
 {
 	msg_speaker = -1;
-	memset(msg_line,'\0',MSG_LINE_LEN*3);
+	memset(msg_line, '\0', MSG_LINE_LEN * 3);
 }
 
-void message_post(int speaker, const char *message)
+void message_post(int speaker, const char * message)
 {
-	memcpy(msg_line[2],msg_line[1],MSG_LINE_LEN);
-	memcpy(msg_line[1],msg_line[0],MSG_LINE_LEN);
-	memcpy(msg_line[0],message,MSG_LINE_LEN);
+	memcpy(msg_line[2], msg_line[1], MSG_LINE_LEN);
+	memcpy(msg_line[1], msg_line[0], MSG_LINE_LEN);
+	memcpy(msg_line[0], message, MSG_LINE_LEN);
 	msg_speaker = speaker;
 }
 
 void message_draw()
 {
 	glCallList(list_bubble);
+
 	// if there is a speaker...
 	if (msg_speaker >= 0)
 		glCallList(list_speaker);
 
 	glDisable(GL_ALPHA_TEST);
 	glDisable(GL_TEXTURE_2D);
-
 	// draw both lines.
-	glColor3f(0,0,0);
-	glPrint(200,SCREEN_Y-5,msg_line[0]);
-	glPrint(200,SCREEN_Y-13,msg_line[1]);
-	glPrint(200,SCREEN_Y-21,msg_line[2]);
-	glColor3f(1,1,1);
+	glColor3f(0, 0, 0);
+	glPrint(200, SCREEN_Y - 5, msg_line[0]);
+	glPrint(200, SCREEN_Y - 13, msg_line[1]);
+	glPrint(200, SCREEN_Y - 21, msg_line[2]);
+	glColor3f(1, 1, 1);
 	glEnable(GL_TEXTURE_2D);
 }
 
 //////////////////////////
 // music handler functions
-Mix_Music *music_play(const char *filename)
+Mix_Music * music_play(const char * filename)
 {
 	// Pointer to new music
-	Mix_Music *music = NULL;
+	Mix_Music * music = NULL;
 
 	// If volume is non-zero...
-	if (env.ok_music && env.volume)
-	{
+	if (env.ok_music && env.volume) {
 		// Attempt to load the music from filename.
 		music = Mix_LoadMUS(filename);
+
 		// Check for error
 		if (!music)
-		{
-			fprintf(stderr,"ERROR: music_play: Mix_LoadMUS(\"%s\"): %s\n", filename, Mix_GetError());
-		} else {
+			fprintf(stderr, "ERROR: music_play: Mix_LoadMUS(\"%s\"): %s\n", filename, Mix_GetError());
+
+		else {
 			// Music loaded OK, play it
 			if (Mix_PlayMusic(music, -1))
-				fprintf(stderr,"ERROR: music_play: Mix_PlayMusic(\"%s\"): %s\n", filename, Mix_GetError());
+				fprintf(stderr, "ERROR: music_play: Mix_PlayMusic(\"%s\"): %s\n", filename, Mix_GetError());
 		}
 	}
 

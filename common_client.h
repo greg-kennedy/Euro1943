@@ -1,6 +1,6 @@
 /* EURO1943 - GREG KENNEDY
 	http://greg-kennedy.com */
-	
+
 /* common_client.h - Declarations common to Client modules goes here. */
 
 #ifndef COMMON_CLIENT_H_
@@ -66,21 +66,21 @@ void init_common();
 void quit_common();
 
 // load texture, return opengl texture id
-GLuint load_texture(const char *fname, GLuint min_filt, GLuint max_filt);
-GLuint load_texture_extra(const char *fname, GLuint min_filt, GLuint max_filt, int *orig_w, int *orig_h);
+GLuint load_texture(const char * fname, GLuint min_filt, GLuint max_filt);
+GLuint load_texture_extra(const char * fname, GLuint min_filt, GLuint max_filt, int * orig_w, int * orig_h);
 
 // GL wrapper functions to do some common actions
-void glPrint(GLshort x, GLshort y, const char *text);
+void glPrint(GLshort x, GLshort y, const char * text);
 void glDrawCursor(GLfloat x, GLfloat y);
 void glBox(GLuint texture, GLushort w, GLushort h);
 void glBoxPos(GLuint texture, GLushort w, GLushort h, GLshort x, GLshort y);
 
 // message-box (speech bubble) functions
 void message_clear();
-void message_post(int speaker, const char *message);
+void message_post(int speaker, const char * message);
 void message_draw();
 
 // music handler functions
-Mix_Music *music_play(const char *filename);
+Mix_Music * music_play(const char * filename);
 
 #endif
